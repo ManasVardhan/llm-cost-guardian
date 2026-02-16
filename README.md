@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/hero.svg" alt="llm-cost-guardian" width="800">
+</p>
+
 # LLM Cost Guardian
 
 **Real-time cost monitoring and budget enforcement for LLM API calls.**
