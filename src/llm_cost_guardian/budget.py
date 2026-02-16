@@ -103,7 +103,8 @@ class SlidingWindowPolicy(BudgetPolicy):
         if window_cost >= self.limit_usd:
             return BudgetResult(
                 self.action_on_exceed,
-                f"Sliding window ({self.window_seconds}s) cost ${window_cost:.4f} >= ${self.limit_usd:.2f}",
+                f"Sliding window ({self.window_seconds}s) "
+                f"cost ${window_cost:.4f} >= ${self.limit_usd:.2f}",
                 window_cost,
                 self.limit_usd,
             )

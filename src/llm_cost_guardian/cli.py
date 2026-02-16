@@ -41,7 +41,8 @@ def models(provider: str | None, as_json: bool) -> None:
     click.echo("-" * 74)
     for m in model_list:
         click.echo(
-            f"{m.name:<40} {m.provider.value:<12} ${m.input_cost_per_1m:>8.3f} ${m.output_cost_per_1m:>8.3f}"
+            f"{m.name:<40} {m.provider.value:<12} "
+                f"${m.input_cost_per_1m:>8.3f} ${m.output_cost_per_1m:>8.3f}"
         )
 
 
