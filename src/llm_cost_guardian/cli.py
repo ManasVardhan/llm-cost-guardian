@@ -7,7 +7,7 @@ import sys
 
 import click
 
-from .models import PRICING, Provider, list_models
+from .models import Provider, list_models
 
 
 @click.group()

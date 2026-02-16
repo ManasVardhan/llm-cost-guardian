@@ -8,7 +8,7 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .tracker import CostTracker, UsageRecord
+    from .tracker import CostTracker
 
 
 class Action(str, Enum):
