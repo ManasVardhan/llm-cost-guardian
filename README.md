@@ -49,15 +49,15 @@ print(f"Cost so far: ${tracker.total_cost:.4f}")
 
 ```
 ┌──────────────┐     ┌─────────────────────────────────────┐     ┌──────────────┐
-│              │     │        LLM Cost Guardian             │     │              │
+│              │     │        LLM Cost Guardian            │     │              │
 │  Your Code   │────>│  ┌───────────┐   ┌──────────────┐   │────>│   LLM API    │
-│              │     │  │  Tracker   │   │   Budget     │   │     │  (OpenAI /   │
-│              │<────│  │  (costs)   │   │  (policies)  │   │<────│  Anthropic / │
+│              │     │  │  Tracker  │   │   Budget     │   │     │  (OpenAI /   │
+│              │<────│  │  (costs)  │   │  (policies)  │   │<────│  Anthropic / │
 │              │     │  └───────────┘   └──────────────┘   │     │   Google)    │
 └──────────────┘     │  ┌───────────┐   ┌──────────────┐   │     └──────────────┘
                      │  │ Exporters │   │     CLI      │   │
                      │  │ (JSON/CSV/│   │              │   │
-                     │  │ Prometheus)│   │              │   │
+                     │  │Prometheus)│   │              │   │
                      │  └───────────┘   └──────────────┘   │
                      └─────────────────────────────────────┘
 ```
