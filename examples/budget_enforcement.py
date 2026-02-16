@@ -9,9 +9,7 @@ from llm_cost_guardian import (
 )
 
 tracker = CostTracker()
-budget = BudgetManager(
-    on_warn=lambda r: print(f"WARNING: {r.message}")
-)
+budget = BudgetManager(on_warn=lambda r: print(f"WARNING: {r.message}"))
 budget.add(SoftWarningPolicy(warning_usd=0.005))
 budget.add(HardCapPolicy(limit_usd=0.01))
 

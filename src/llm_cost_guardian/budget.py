@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 
 class Action(str, Enum):
     """What to do when a budget threshold is crossed."""
+
     ALLOW = "allow"
     WARN = "warn"
     BLOCK = "block"
@@ -97,9 +98,7 @@ class SlidingWindowPolicy(BudgetPolicy):
     def evaluate(self, tracker: CostTracker) -> BudgetResult:
         now = time.time()
         cutoff = now - self.window_seconds
-        window_cost = sum(
-            r.cost for r in tracker.records if r.timestamp >= cutoff
-        )
+        window_cost = sum(r.cost for r in tracker.records if r.timestamp >= cutoff)
         if window_cost >= self.limit_usd:
             return BudgetResult(
                 self.action_on_exceed,

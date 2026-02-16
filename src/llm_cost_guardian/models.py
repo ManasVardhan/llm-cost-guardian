@@ -36,10 +36,7 @@ class ModelPricing:
 
     def calculate_cost(self, input_tokens: int, output_tokens: int) -> float:
         """Calculate total cost for a given number of tokens."""
-        return (
-            input_tokens * self.input_cost_per_token
-            + output_tokens * self.output_cost_per_token
-        )
+        return input_tokens * self.input_cost_per_token + output_tokens * self.output_cost_per_token
 
 
 # ---------------------------------------------------------------------------
