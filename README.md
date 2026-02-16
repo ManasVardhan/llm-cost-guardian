@@ -1,6 +1,8 @@
 
 # LLM Cost Guardian
 
+> **New here?** Start with the [Getting Started Guide](GETTING_STARTED.md).
+
 **Real-time cost monitoring and budget enforcement for LLM API calls.**
 
 [![PyPI](https://img.shields.io/pypi/v/llm-cost-guardian)](https://pypi.org/project/llm-cost-guardian/)
