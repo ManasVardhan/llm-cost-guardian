@@ -1,0 +1,49 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "llm-cost-guardian"
+version = "0.1.0"
+description = "Real-time cost monitoring and budget enforcement for LLM API calls"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [{ name = "Manas Vardhan" }]
+keywords = ["llm", "cost", "monitoring", "openai", "anthropic", "budget"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries",
+    "Typing :: Typed",
+]
+dependencies = ["click>=8.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "ruff>=0.4"]
+openai = ["openai>=1.0"]
+anthropic = ["anthropic>=0.20"]
+
+[project.scripts]
+llm-cost-guardian = "llm_cost_guardian.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/manasvardhan/llm-cost-guardian"
+Repository = "https://github.com/manasvardhan/llm-cost-guardian"
+Issues = "https://github.com/manasvardhan/llm-cost-guardian/issues"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
