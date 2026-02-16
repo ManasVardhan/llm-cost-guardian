@@ -1,6 +1,3 @@
-<p align="center">
-  <img src="assets/banner.svg" alt="llm-cost-guardian" width="800">
-</p>
 
 # LLM Cost Guardian
 
