@@ -58,6 +58,11 @@ class CostTracker:
         metadata: dict[str, str] | None = None,
     ) -> UsageRecord:
         """Record a single API call. If *cost* is None it is calculated from pricing data."""
+        if input_tokens < 0 or output_tokens < 0:
+            raise ValueError(
+                f"Token counts must be non-negative, got input_tokens={input_tokens}, "
+                f"output_tokens={output_tokens}"
+            )
         if cost is None:
             pricing = get_pricing(model)
             cost = pricing.calculate_cost(input_tokens, output_tokens)
