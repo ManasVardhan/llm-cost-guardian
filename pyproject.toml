@@ -4,12 +4,12 @@ build-backend = "hatchling.build"
 
 [project]
 name = "llm-cost-guardian"
-version = "0.1.0"
+version = "0.1.1"
 description = "Real-time cost monitoring and budget enforcement for LLM API calls"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
-authors = [{ name = "Manas Vardhan" }]
+authors = [{ name = "Manas Vardhan", email = "manasvardhan@gmail.com" }]
 keywords = ["llm", "cost", "monitoring", "openai", "anthropic", "budget"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -34,6 +34,8 @@ anthropic = ["anthropic>=0.20"]
 llm-cost-guardian = "llm_cost_guardian.cli:main"
 
 [project.urls]
+Documentation = "https://github.com/ManasVardhan/llm-cost-guardian#readme"
+Changelog = "https://github.com/ManasVardhan/llm-cost-guardian/releases"
 Homepage = "https://github.com/manasvardhan/llm-cost-guardian"
 Repository = "https://github.com/manasvardhan/llm-cost-guardian"
 Issues = "https://github.com/manasvardhan/llm-cost-guardian/issues"
