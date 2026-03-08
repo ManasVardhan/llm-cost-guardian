@@ -234,6 +234,9 @@ models:
 
 | Model | Provider | Input / 1M tokens | Output / 1M tokens |
 |-------|----------|-------------------|---------------------|
+| `gpt-4.1` | OpenAI | $2.00 | $8.00 |
+| `gpt-4.1-mini` | OpenAI | $0.40 | $1.60 |
+| `gpt-4.1-nano` | OpenAI | $0.10 | $0.40 |
 | `gpt-4o` | OpenAI | $2.50 | $10.00 |
 | `gpt-4o-mini` | OpenAI | $0.15 | $0.60 |
 | `gpt-4-turbo` | OpenAI | $10.00 | $30.00 |
@@ -241,7 +244,9 @@ models:
 | `gpt-3.5-turbo` | OpenAI | $0.50 | $1.50 |
 | `o1` | OpenAI | $15.00 | $60.00 |
 | `o1-mini` | OpenAI | $3.00 | $12.00 |
+| `o3` | OpenAI | $10.00 | $40.00 |
 | `o3-mini` | OpenAI | $1.10 | $4.40 |
+| `o4-mini` | OpenAI | $1.10 | $4.40 |
 | `claude-opus-4-20250514` | Anthropic | $15.00 | $75.00 |
 | `claude-sonnet-4-20250514` | Anthropic | $3.00 | $15.00 |
 | `claude-3-5-sonnet-20241022` | Anthropic | $3.00 | $15.00 |

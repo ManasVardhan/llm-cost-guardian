@@ -1,7 +1,7 @@
 """Pricing data for supported LLM models.
 
 All prices are in USD per 1M tokens unless otherwise noted.
-Last updated: 2025-01-15
+Last updated: 2026-03-07
 """
 
 from __future__ import annotations
@@ -55,12 +55,17 @@ def _register(*models: ModelPricing) -> None:
 _register(
     ModelPricing("gpt-4o", Provider.OPENAI, 2.50, 10.00, 128_000),
     ModelPricing("gpt-4o-mini", Provider.OPENAI, 0.15, 0.60, 128_000),
+    ModelPricing("gpt-4.1", Provider.OPENAI, 2.00, 8.00, 1_047_576),
+    ModelPricing("gpt-4.1-mini", Provider.OPENAI, 0.40, 1.60, 1_047_576),
+    ModelPricing("gpt-4.1-nano", Provider.OPENAI, 0.10, 0.40, 1_047_576),
     ModelPricing("gpt-4-turbo", Provider.OPENAI, 10.00, 30.00, 128_000),
     ModelPricing("gpt-4", Provider.OPENAI, 30.00, 60.00, 8_192),
     ModelPricing("gpt-3.5-turbo", Provider.OPENAI, 0.50, 1.50, 16_385),
     ModelPricing("o1", Provider.OPENAI, 15.00, 60.00, 200_000),
     ModelPricing("o1-mini", Provider.OPENAI, 3.00, 12.00, 128_000),
+    ModelPricing("o3", Provider.OPENAI, 10.00, 40.00, 200_000),
     ModelPricing("o3-mini", Provider.OPENAI, 1.10, 4.40, 200_000),
+    ModelPricing("o4-mini", Provider.OPENAI, 1.10, 4.40, 200_000),
 )
 
 # Anthropic models
