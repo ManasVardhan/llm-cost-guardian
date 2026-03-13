@@ -14,7 +14,7 @@ from .models import ModelPricing, Provider, get_pricing, list_models
 from .tracker import CostTracker, UsageRecord
 from .wrappers import TrackedAnthropic, TrackedOpenAI
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 __all__ = [
     "Action",

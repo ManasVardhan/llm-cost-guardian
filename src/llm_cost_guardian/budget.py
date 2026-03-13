@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING
@@ -128,7 +129,7 @@ class BudgetManager:
     """Evaluates a stack of policies and enforces the strictest outcome."""
 
     policies: list[BudgetPolicy] = field(default_factory=list)
-    on_warn: callable = None  # type: ignore[assignment]
+    on_warn: Callable[[BudgetResult], None] | None = None
 
     def add(self, policy: BudgetPolicy) -> BudgetManager:
         self.policies.append(policy)
@@ -136,13 +137,18 @@ class BudgetManager:
 
     def check(self, tracker: CostTracker) -> BudgetResult:
         """Evaluate all policies. Returns the most restrictive result."""
-        worst = BudgetResult(Action.ALLOW, "No policies configured", 0.0, 0.0)
+        if not self.policies:
+            return BudgetResult(Action.ALLOW, "No policies configured", 0.0, 0.0)
+        worst: BudgetResult | None = None
         for policy in self.policies:
             result = policy.evaluate(tracker)
             if result.action == Action.BLOCK:
                 return result
-            if result.action == Action.WARN and worst.action == Action.ALLOW:
+            if worst is None or (
+                result.action == Action.WARN and worst.action == Action.ALLOW
+            ):
                 worst = result
+        assert worst is not None  # guaranteed since policies is non-empty
         return worst
 
     def enforce(self, tracker: CostTracker) -> BudgetResult:
