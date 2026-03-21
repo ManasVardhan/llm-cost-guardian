@@ -54,6 +54,14 @@ def estimate(model: str, input_tokens: int, output_tokens: int) -> None:
     """Estimate cost for a given model and token count."""
     from .models import get_pricing
 
+    if input_tokens < 0 or output_tokens < 0:
+        click.echo(
+            f"Error: Token counts must be non-negative, got "
+            f"input_tokens={input_tokens}, output_tokens={output_tokens}",
+            err=True,
+        )
+        sys.exit(1)
+
     try:
         pricing = get_pricing(model)
     except KeyError as e:
@@ -71,8 +79,19 @@ def estimate(model: str, input_tokens: int, output_tokens: int) -> None:
 @click.argument("report_file", type=click.Path(exists=True))
 def report(report_file: str) -> None:
     """Display a summary from a JSON report file."""
-    with open(report_file) as f:
-        data = json.load(f)
+    try:
+        with open(report_file) as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        click.echo(f"Error: {report_file} is not valid JSON: {e}", err=True)
+        sys.exit(1)
+
+    if not isinstance(data, dict):
+        click.echo(
+            f"Error: Expected a JSON object in {report_file}, got {type(data).__name__}",
+            err=True,
+        )
+        sys.exit(1)
 
     summary = data.get("summary", {})
     click.echo("=== LLM Cost Report ===")

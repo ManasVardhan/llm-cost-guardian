@@ -65,9 +65,9 @@ List all supported models and their pricing:
 llm-cost-guardian models
 ```
 
-Check a summary (will be empty since you haven't tracked anything yet):
+Estimate the cost for a specific call:
 ```bash
-llm-cost-guardian summary
+llm-cost-guardian estimate gpt-4o --input-tokens 1000 --output-tokens 500
 ```
 
 ### 5b. Run the example scripts
@@ -95,14 +95,14 @@ tracker.record(
 )
 
 tracker.record(
-    model="claude-3.5-sonnet",
+    model="claude-3-5-sonnet-20241022",
     input_tokens=1000,
     output_tokens=300
 )
 
 # See what you've spent
 summary = tracker.summary()
-print(f"Total cost: ${summary['total_cost']:.4f}")
+print(f"Total cost: ${summary['total_cost_usd']:.4f}")
 print(f"Total calls: {summary['total_requests']}")
 for model, cost in summary['cost_by_model'].items():
     print(f"  {model}: ${cost:.4f}")

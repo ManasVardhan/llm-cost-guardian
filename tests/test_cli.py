@@ -78,6 +78,25 @@ class TestEstimateCommand:
         # gpt-4: $30/1M in, $60/1M out = $30 + $30 = $60
         assert "$60.000000" in result.output
 
+    def test_estimate_negative_input_tokens(self):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["estimate", "gpt-4o", "-i", "-100", "-o", "50"])
+        assert result.exit_code == 1
+        assert "non-negative" in result.output
+
+    def test_estimate_negative_output_tokens(self):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["estimate", "gpt-4o", "-i", "100", "-o", "-50"])
+        assert result.exit_code == 1
+        assert "non-negative" in result.output
+
+    def test_estimate_prefix_matched_model(self):
+        """Versioned model names should resolve via prefix matching."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["estimate", "gpt-4o-2024-08-06", "-i", "1000", "-o", "500"])
+        assert result.exit_code == 0
+        assert "gpt-4o" in result.output
+
 
 class TestReportCommand:
     def test_report_valid_file(self):
@@ -121,6 +140,53 @@ class TestReportCommand:
         runner = CliRunner()
         result = runner.invoke(cli, ["report", "/tmp/does_not_exist_12345.json"])
         assert result.exit_code != 0
+
+    def test_report_malformed_json(self):
+        """Malformed JSON should produce a clear error, not a traceback."""
+        runner = CliRunner()
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            f.write("this is not json {{{")
+            f.flush()
+            result = runner.invoke(cli, ["report", f.name])
+        os.unlink(f.name)
+
+        assert result.exit_code == 1
+        assert "not valid JSON" in result.output
+
+    def test_report_json_array_instead_of_object(self):
+        """A JSON array instead of an object should produce a clear error."""
+        runner = CliRunner()
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump([1, 2, 3], f)
+            f.flush()
+            result = runner.invoke(cli, ["report", f.name])
+        os.unlink(f.name)
+
+        assert result.exit_code == 1
+        assert "Expected a JSON object" in result.output
+
+    def test_report_with_cost_by_model(self):
+        """Verify that cost_by_model is rendered correctly."""
+        runner = CliRunner()
+        report_data = {
+            "summary": {
+                "total_cost_usd": 0.5,
+                "total_requests": 2,
+                "total_input_tokens": 2000,
+                "total_output_tokens": 1000,
+                "cost_by_model": {"gpt-4o": 0.3, "o3-mini": 0.2},
+            }
+        }
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(report_data, f)
+            f.flush()
+            result = runner.invoke(cli, ["report", f.name])
+        os.unlink(f.name)
+
+        assert result.exit_code == 0
+        assert "Cost by model" in result.output
+        assert "gpt-4o" in result.output
+        assert "o3-mini" in result.output
 
 
 class TestVersionFlag:
