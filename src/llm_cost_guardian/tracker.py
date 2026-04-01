@@ -131,6 +131,57 @@ class CostTracker:
             self._total_input_tokens = 0
             self._total_output_tokens = 0
 
+    @property
+    def average_cost(self) -> float:
+        """Return the average cost per request, or 0.0 if no records."""
+        with self._lock:
+            if not self._records:
+                return 0.0
+            return self._total_cost / len(self._records)
+
+    @property
+    def last_record(self) -> UsageRecord | None:
+        """Return the most recent usage record, or None if empty."""
+        with self._lock:
+            return self._records[-1] if self._records else None
+
+    def filter(
+        self,
+        *,
+        model: str | None = None,
+        since: float | None = None,
+        until: float | None = None,
+        min_cost: float | None = None,
+        predicate: Callable[[UsageRecord], bool] | None = None,
+    ) -> list[UsageRecord]:
+        """Filter records by model name, time range, minimum cost, or custom predicate.
+
+        Parameters
+        ----------
+        model : only include records for this model (exact match)
+        since : only include records with timestamp >= this value
+        until : only include records with timestamp <= this value
+        min_cost : only include records with cost >= this value
+        predicate : custom filter function applied to each record
+
+        Returns
+        -------
+        A new list of matching UsageRecord objects.
+        """
+        with self._lock:
+            results = list(self._records)
+        if model is not None:
+            results = [r for r in results if r.model == model]
+        if since is not None:
+            results = [r for r in results if r.timestamp >= since]
+        if until is not None:
+            results = [r for r in results if r.timestamp <= until]
+        if min_cost is not None:
+            results = [r for r in results if r.cost >= min_cost]
+        if predicate is not None:
+            results = [r for r in results if predicate(r)]
+        return results
+
     def summary(self) -> dict[str, object]:
         """Return a summary dict suitable for logging or display."""
         with self._lock:

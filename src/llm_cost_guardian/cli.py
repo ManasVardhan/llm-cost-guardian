@@ -107,6 +107,61 @@ def report(report_file: str) -> None:
             click.echo(f"  {model:<35} ${cost:.6f}")
 
 
+@cli.command()
+@click.argument("report_a", type=click.Path(exists=True))
+@click.argument("report_b", type=click.Path(exists=True))
+def compare(report_a: str, report_b: str) -> None:
+    """Compare two JSON report files side by side."""
+    try:
+        with open(report_a) as f:
+            data_a = json.load(f)
+        with open(report_b) as f:
+            data_b = json.load(f)
+    except json.JSONDecodeError as e:
+        click.echo(f"Error: Invalid JSON: {e}", err=True)
+        sys.exit(1)
+
+    if not isinstance(data_a, dict) or not isinstance(data_b, dict):
+        click.echo("Error: Both files must contain JSON objects.", err=True)
+        sys.exit(1)
+
+    sum_a = data_a.get("summary", {})
+    sum_b = data_b.get("summary", {})
+
+    cost_a = sum_a.get("total_cost_usd", 0)
+    cost_b = sum_b.get("total_cost_usd", 0)
+    cost_diff = cost_b - cost_a
+    cost_pct = (cost_diff / cost_a * 100) if cost_a else 0
+
+    req_a = sum_a.get("total_requests", 0)
+    req_b = sum_b.get("total_requests", 0)
+
+    tok_a = sum_a.get("total_input_tokens", 0) + sum_a.get("total_output_tokens", 0)
+    tok_b = sum_b.get("total_input_tokens", 0) + sum_b.get("total_output_tokens", 0)
+
+    click.echo("=== Cost Comparison ===")
+    click.echo(f"{'Metric':<25} {'Report A':>12} {'Report B':>12} {'Change':>12}")
+    click.echo("-" * 63)
+    click.echo(f"{'Total cost (USD)':<25} ${cost_a:>11.6f} ${cost_b:>11.6f} {cost_diff:>+11.6f}")
+    click.echo(f"{'Requests':<25} {req_a:>12,} {req_b:>12,} {req_b - req_a:>+12,}")
+    click.echo(f"{'Total tokens':<25} {tok_a:>12,} {tok_b:>12,} {tok_b - tok_a:>+12,}")
+    if cost_a:
+        click.echo(f"\nCost change: {cost_pct:+.1f}%")
+
+    # Per-model breakdown
+    models_a = sum_a.get("cost_by_model", {})
+    models_b = sum_b.get("cost_by_model", {})
+    all_models = sorted(set(list(models_a.keys()) + list(models_b.keys())))
+
+    if all_models:
+        click.echo(f"\n{'Model':<35} {'A cost':>10} {'B cost':>10} {'Change':>10}")
+        click.echo("-" * 67)
+        for model in all_models:
+            ca = models_a.get(model, 0)
+            cb = models_b.get(model, 0)
+            click.echo(f"{model:<35} ${ca:>9.6f} ${cb:>9.6f} {cb - ca:>+9.6f}")
+
+
 def main() -> None:
     cli()
 

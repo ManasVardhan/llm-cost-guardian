@@ -97,6 +97,55 @@ def get_pricing(model: str) -> ModelPricing:
     raise KeyError(f"Unknown model: {model!r}. Register it or use a known model name.")
 
 
+def register_model(
+    name: str,
+    provider: str | Provider,
+    input_cost_per_1m: float,
+    output_cost_per_1m: float,
+    context_window: int | None = None,
+) -> ModelPricing:
+    """Register a custom model for cost tracking.
+
+    Parameters
+    ----------
+    name : model identifier (e.g. "my-finetuned-llama")
+    provider : provider name or Provider enum value
+    input_cost_per_1m : cost in USD per 1M input tokens
+    output_cost_per_1m : cost in USD per 1M output tokens
+    context_window : optional max context length
+
+    Returns
+    -------
+    The newly registered ModelPricing instance.
+
+    Raises
+    ------
+    ValueError
+        If costs are negative.
+
+    Example::
+
+        from llm_cost_guardian import register_model
+        register_model("my-model", "openai", 1.00, 3.00)
+    """
+    if input_cost_per_1m < 0 or output_cost_per_1m < 0:
+        raise ValueError(
+            f"Costs must be non-negative, got input={input_cost_per_1m}, "
+            f"output={output_cost_per_1m}"
+        )
+    if isinstance(provider, str):
+        provider = Provider(provider)
+    pricing = ModelPricing(
+        name=name,
+        provider=provider,
+        input_cost_per_1m=input_cost_per_1m,
+        output_cost_per_1m=output_cost_per_1m,
+        context_window=context_window,
+    )
+    PRICING[name] = pricing
+    return pricing
+
+
 def list_models(provider: Provider | None = None) -> list[ModelPricing]:
     """List all known models, optionally filtered by provider."""
     models = list(PRICING.values())
