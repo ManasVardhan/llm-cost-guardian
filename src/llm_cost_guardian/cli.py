@@ -162,6 +162,59 @@ def compare(report_a: str, report_b: str) -> None:
             click.echo(f"{model:<35} ${ca:>9.6f} ${cb:>9.6f} {cb - ca:>+9.6f}")
 
 
+@cli.command()
+@click.argument("report_file", type=click.Path(exists=True))
+@click.option("--limit", "-n", type=int, default=10, help="Number of records to show (default 10).")
+@click.option("--json-output", "as_json", is_flag=True, help="Output as JSON.")
+def top(report_file: str, limit: int, as_json: bool) -> None:
+    """Show the most expensive API calls from a JSON report."""
+    try:
+        with open(report_file) as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        click.echo(f"Error: {report_file} is not valid JSON: {e}", err=True)
+        sys.exit(1)
+
+    if not isinstance(data, dict):
+        click.echo(
+            f"Error: Expected a JSON object in {report_file}, got {type(data).__name__}",
+            err=True,
+        )
+        sys.exit(1)
+
+    records = data.get("records", [])
+    if not records:
+        click.echo("No records found in report.")
+        return
+
+    sorted_records = sorted(records, key=lambda r: r.get("cost_usd", 0), reverse=True)
+    top_records = sorted_records[:limit]
+
+    if as_json:
+        click.echo(json.dumps(top_records, indent=2))
+        return
+
+    click.echo(f"=== Top {min(limit, len(records))} Most Expensive Calls ===")
+    click.echo(f"{'#':<4} {'Model':<35} {'Input':>8} {'Output':>8} {'Cost':>12}")
+    click.echo("-" * 69)
+    for i, rec in enumerate(top_records, 1):
+        model = rec.get("model", "unknown")
+        inp = rec.get("input_tokens", 0)
+        out = rec.get("output_tokens", 0)
+        cost = rec.get("cost_usd", 0)
+        click.echo(f"{i:<4} {model:<35} {inp:>8,} {out:>8,} ${cost:>11.6f}")
+
+    total = sum(r.get("cost_usd", 0) for r in records)
+    top_total = sum(r.get("cost_usd", 0) for r in top_records)
+    if total > 0:
+        pct = top_total / total * 100
+        n_top = len(top_records)
+        click.echo(
+            f"\nTop {n_top} account for ${top_total:.6f}"
+            f" of ${total:.6f} total ({pct:.1f}%)"
+        )
+
+
 def main() -> None:
     cli()
 

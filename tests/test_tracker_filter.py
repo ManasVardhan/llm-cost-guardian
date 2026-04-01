@@ -1,7 +1,5 @@
 """Tests for CostTracker.filter(), average_cost, and last_record."""
 
-import time
-
 from llm_cost_guardian import CostTracker
 
 
@@ -21,6 +19,12 @@ class TestAverageCost:
         tracker.record("gpt-4o", input_tokens=2000, output_tokens=1000, cost=0.20)
         assert abs(tracker.average_cost - 0.15) < 1e-10
 
+    def test_average_cost_after_reset(self) -> None:
+        tracker = CostTracker()
+        tracker.record("gpt-4o", input_tokens=1000, output_tokens=500)
+        tracker.reset()
+        assert tracker.average_cost == 0.0
+
 
 class TestLastRecord:
     def test_last_record_empty(self) -> None:
@@ -38,6 +42,12 @@ class TestLastRecord:
         rec2 = tracker.record("gpt-4o-mini", input_tokens=200, output_tokens=100)
         assert tracker.last_record is rec2
         assert tracker.last_record.model == "gpt-4o-mini"
+
+    def test_last_record_after_reset(self) -> None:
+        tracker = CostTracker()
+        tracker.record("gpt-4o", input_tokens=100, output_tokens=50)
+        tracker.reset()
+        assert tracker.last_record is None
 
 
 class TestFilter:
@@ -67,20 +77,34 @@ class TestFilter:
     def test_filter_by_since(self) -> None:
         tracker = CostTracker()
         old_rec = tracker.record("gpt-4o", input_tokens=100, output_tokens=50)
-        cutoff = time.time()
+        old_rec.timestamp = 1000.0
         new_rec = tracker.record("gpt-4o", input_tokens=200, output_tokens=100)
-        results = tracker.filter(since=cutoff)
+        new_rec.timestamp = 2000.0
+        results = tracker.filter(since=1500.0)
         assert len(results) == 1
-        assert results[0] is new_rec
+        assert results[0].input_tokens == 200
 
     def test_filter_by_until(self) -> None:
         tracker = CostTracker()
         old_rec = tracker.record("gpt-4o", input_tokens=100, output_tokens=50)
-        cutoff = time.time()
-        tracker.record("gpt-4o", input_tokens=200, output_tokens=100)
-        results = tracker.filter(until=cutoff)
+        old_rec.timestamp = 1000.0
+        new_rec = tracker.record("gpt-4o", input_tokens=200, output_tokens=100)
+        new_rec.timestamp = 2000.0
+        results = tracker.filter(until=1500.0)
         assert len(results) == 1
-        assert results[0] is old_rec
+        assert results[0].input_tokens == 100
+
+    def test_filter_since_and_until(self) -> None:
+        tracker = CostTracker()
+        r1 = tracker.record("gpt-4o", input_tokens=100, output_tokens=50)
+        r1.timestamp = 1000.0
+        r2 = tracker.record("gpt-4o", input_tokens=200, output_tokens=100)
+        r2.timestamp = 2000.0
+        r3 = tracker.record("gpt-4o", input_tokens=300, output_tokens=150)
+        r3.timestamp = 3000.0
+        results = tracker.filter(since=1500.0, until=2500.0)
+        assert len(results) == 1
+        assert results[0].input_tokens == 200
 
     def test_filter_by_predicate(self) -> None:
         tracker = CostTracker()
@@ -90,7 +114,7 @@ class TestFilter:
         assert len(results) == 1
         assert results[0].total_tokens == 7500
 
-    def test_filter_combined(self) -> None:
+    def test_filter_combined_model_and_min_cost(self) -> None:
         tracker = CostTracker()
         tracker.record("gpt-4o", input_tokens=100, output_tokens=50, cost=0.01)
         tracker.record("gpt-4o", input_tokens=1000, output_tokens=500, cost=0.10)
@@ -110,3 +134,11 @@ class TestFilter:
         tracker = CostTracker()
         results = tracker.filter(model="gpt-4o")
         assert len(results) == 0
+
+    def test_filter_returns_new_list(self) -> None:
+        """Filtered list should not be the internal list."""
+        tracker = CostTracker()
+        tracker.record("gpt-4o", input_tokens=100, output_tokens=50)
+        results = tracker.filter()
+        results.clear()
+        assert len(tracker.records) == 1
