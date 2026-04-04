@@ -1,4 +1,4 @@
-# Roadmap — llm-cost-guardian
+# Roadmap - llm-cost-guardian
 
 ## Shipped in v0.1
 
