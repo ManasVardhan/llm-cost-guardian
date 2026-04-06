@@ -9,7 +9,15 @@ from .budget import (
     SlidingWindowPolicy,
     SoftWarningPolicy,
 )
-from .exporters import save_csv, save_json, to_csv, to_json, to_prometheus
+from .exporters import (
+    save_csv,
+    save_json,
+    save_markdown,
+    to_csv,
+    to_json,
+    to_markdown,
+    to_prometheus,
+)
 from .models import ModelPricing, Provider, get_pricing, list_models, register_model
 from .tracker import CostTracker, UsageRecord
 from .wrappers import TrackedAnthropic, TrackedOpenAI
@@ -35,7 +43,9 @@ __all__ = [
     "register_model",
     "save_csv",
     "save_json",
+    "save_markdown",
     "to_csv",
     "to_json",
+    "to_markdown",
     "to_prometheus",
 ]

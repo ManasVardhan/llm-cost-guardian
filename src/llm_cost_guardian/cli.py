@@ -3,11 +3,49 @@
 from __future__ import annotations
 
 import json
+import math
 import sys
 
 import click
 
 from .models import Provider, list_models
+
+
+def _percentile(values: list[float], pct: float) -> float:
+    """Compute a percentile (0-100) of *values* using linear interpolation.
+
+    Returns 0.0 for an empty list. Mirrors numpy.percentile semantics for the
+    'linear' method without requiring numpy as a runtime dependency.
+    """
+    if not values:
+        return 0.0
+    sorted_vals = sorted(values)
+    if len(sorted_vals) == 1:
+        return float(sorted_vals[0])
+    rank = (pct / 100) * (len(sorted_vals) - 1)
+    low = math.floor(rank)
+    high = math.ceil(rank)
+    if low == high:
+        return float(sorted_vals[int(rank)])
+    weight = rank - low
+    return float(sorted_vals[low] * (1 - weight) + sorted_vals[high] * weight)
+
+
+def _load_report(report_file: str) -> dict:
+    try:
+        with open(report_file) as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        click.echo(f"Error: {report_file} is not valid JSON: {e}", err=True)
+        sys.exit(1)
+
+    if not isinstance(data, dict):
+        click.echo(
+            f"Error: Expected a JSON object in {report_file}, got {type(data).__name__}",
+            err=True,
+        )
+        sys.exit(1)
+    return data
 
 
 @click.group()
@@ -79,19 +117,7 @@ def estimate(model: str, input_tokens: int, output_tokens: int) -> None:
 @click.argument("report_file", type=click.Path(exists=True))
 def report(report_file: str) -> None:
     """Display a summary from a JSON report file."""
-    try:
-        with open(report_file) as f:
-            data = json.load(f)
-    except json.JSONDecodeError as e:
-        click.echo(f"Error: {report_file} is not valid JSON: {e}", err=True)
-        sys.exit(1)
-
-    if not isinstance(data, dict):
-        click.echo(
-            f"Error: Expected a JSON object in {report_file}, got {type(data).__name__}",
-            err=True,
-        )
-        sys.exit(1)
+    data = _load_report(report_file)
 
     summary = data.get("summary", {})
     click.echo("=== LLM Cost Report ===")
@@ -168,19 +194,7 @@ def compare(report_a: str, report_b: str) -> None:
 @click.option("--json-output", "as_json", is_flag=True, help="Output as JSON.")
 def top(report_file: str, limit: int, as_json: bool) -> None:
     """Show the most expensive API calls from a JSON report."""
-    try:
-        with open(report_file) as f:
-            data = json.load(f)
-    except json.JSONDecodeError as e:
-        click.echo(f"Error: {report_file} is not valid JSON: {e}", err=True)
-        sys.exit(1)
-
-    if not isinstance(data, dict):
-        click.echo(
-            f"Error: Expected a JSON object in {report_file}, got {type(data).__name__}",
-            err=True,
-        )
-        sys.exit(1)
+    data = _load_report(report_file)
 
     records = data.get("records", [])
     if not records:
@@ -213,6 +227,153 @@ def top(report_file: str, limit: int, as_json: bool) -> None:
             f"\nTop {n_top} account for ${top_total:.6f}"
             f" of ${total:.6f} total ({pct:.1f}%)"
         )
+
+
+@cli.command()
+@click.argument("report_file", type=click.Path(exists=True))
+@click.option("--json-output", "as_json", is_flag=True, help="Output as JSON.")
+def stats(report_file: str, as_json: bool) -> None:
+    """Show distribution stats (percentiles, min/max) for a JSON report."""
+    data = _load_report(report_file)
+
+    records = data.get("records", [])
+    if not records:
+        if as_json:
+            click.echo(json.dumps({"records": 0}))
+        else:
+            click.echo("No records found in report.")
+        return
+
+    costs = [float(r.get("cost_usd", 0) or 0) for r in records]
+    in_tokens = [int(r.get("input_tokens", 0) or 0) for r in records]
+    out_tokens = [int(r.get("output_tokens", 0) or 0) for r in records]
+    total_tokens = [i + o for i, o in zip(in_tokens, out_tokens, strict=True)]
+
+    n = len(records)
+    total_cost = sum(costs)
+    mean_cost = total_cost / n if n else 0.0
+
+    p50 = _percentile(costs, 50)
+    p90 = _percentile(costs, 90)
+    p99 = _percentile(costs, 99)
+    cost_min = min(costs) if costs else 0.0
+    cost_max = max(costs) if costs else 0.0
+
+    total_tokens_f = [float(t) for t in total_tokens]
+    tok_p50 = _percentile(total_tokens_f, 50)
+    tok_p90 = _percentile(total_tokens_f, 90)
+    tok_p99 = _percentile(total_tokens_f, 99)
+
+    payload = {
+        "records": n,
+        "total_cost_usd": round(total_cost, 6),
+        "cost_per_call": {
+            "mean": round(mean_cost, 6),
+            "min": round(cost_min, 6),
+            "max": round(cost_max, 6),
+            "p50": round(p50, 6),
+            "p90": round(p90, 6),
+            "p99": round(p99, 6),
+        },
+        "tokens_per_call": {
+            "mean": round(sum(total_tokens) / n, 2) if n else 0,
+            "p50": round(tok_p50, 2),
+            "p90": round(tok_p90, 2),
+            "p99": round(tok_p99, 2),
+        },
+    }
+
+    if as_json:
+        click.echo(json.dumps(payload, indent=2))
+        return
+
+    click.echo("=== Cost Distribution ===")
+    click.echo(f"Records:           {n:,}")
+    click.echo(f"Total cost:        ${total_cost:.6f}")
+    click.echo()
+    click.echo("Cost per call (USD):")
+    click.echo(f"  mean:            ${mean_cost:.6f}")
+    click.echo(f"  min:             ${cost_min:.6f}")
+    click.echo(f"  p50 (median):    ${p50:.6f}")
+    click.echo(f"  p90:             ${p90:.6f}")
+    click.echo(f"  p99:             ${p99:.6f}")
+    click.echo(f"  max:             ${cost_max:.6f}")
+    click.echo()
+    click.echo("Tokens per call:")
+    click.echo(f"  p50: {int(tok_p50):,}   p90: {int(tok_p90):,}   p99: {int(tok_p99):,}")
+
+
+@cli.command()
+@click.argument("report_file", type=click.Path(exists=True))
+@click.option("--days", type=float, default=30.0, help="Forecast horizon in days (default 30).")
+@click.option("--json-output", "as_json", is_flag=True, help="Output as JSON.")
+def forecast(report_file: str, days: float, as_json: bool) -> None:
+    """Project total cost forward based on the report's observed time window."""
+    data = _load_report(report_file)
+
+    records = data.get("records", [])
+    if not records:
+        click.echo("No records found in report.", err=not as_json)
+        if as_json:
+            click.echo(json.dumps({"records": 0}))
+        sys.exit(1 if not as_json else 0)
+
+    timestamps = [
+        float(r.get("timestamp", 0) or 0) for r in records if r.get("timestamp") is not None
+    ]
+    timestamps = [t for t in timestamps if t > 0]
+    costs = [float(r.get("cost_usd", 0) or 0) for r in records]
+    total_cost = sum(costs)
+
+    if len(timestamps) < 2:
+        click.echo(
+            "Error: forecast requires at least 2 records with valid timestamps.",
+            err=True,
+        )
+        sys.exit(1)
+
+    span_seconds = max(timestamps) - min(timestamps)
+    if span_seconds <= 0:
+        click.echo(
+            "Error: report timestamps span 0 seconds; cannot forecast.",
+            err=True,
+        )
+        sys.exit(1)
+
+    seconds_per_day = 86400.0
+    span_days = span_seconds / seconds_per_day
+    cost_per_day = total_cost / span_days
+    projected = cost_per_day * days
+
+    payload = {
+        "observed": {
+            "records": len(records),
+            "total_cost_usd": round(total_cost, 6),
+            "span_days": round(span_days, 4),
+        },
+        "rates": {
+            "cost_per_day_usd": round(cost_per_day, 6),
+            "cost_per_hour_usd": round(cost_per_day / 24, 6),
+        },
+        "forecast": {
+            "horizon_days": days,
+            "projected_cost_usd": round(projected, 6),
+        },
+    }
+
+    if as_json:
+        click.echo(json.dumps(payload, indent=2))
+        return
+
+    click.echo("=== Cost Forecast ===")
+    click.echo(f"Observed records:    {len(records):,}")
+    click.echo(f"Observed cost:       ${total_cost:.6f}")
+    click.echo(f"Observed window:     {span_days:.2f} days")
+    click.echo()
+    click.echo(f"Cost per day:        ${cost_per_day:.6f}")
+    click.echo(f"Cost per hour:       ${cost_per_day / 24:.6f}")
+    click.echo()
+    click.echo(f"Projected over {days:g} days:  ${projected:.6f}")
 
 
 def main() -> None:

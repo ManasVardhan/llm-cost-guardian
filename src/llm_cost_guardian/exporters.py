@@ -70,6 +70,63 @@ def to_prometheus(tracker: CostTracker, prefix: str = "llm_cost_guardian") -> st
     return "\n".join(lines)
 
 
+def to_markdown(tracker: CostTracker, title: str = "LLM Cost Report") -> str:
+    """Export a tracker as a human-readable markdown report.
+
+    Includes a summary header, a per-model breakdown table, and a recent calls
+    table. Designed for pasting into pull requests, issues, or chat threads.
+    """
+    summary = tracker.summary()
+    cost_by_model = summary.get("cost_by_model", {}) or {}
+    total_cost = float(summary.get("total_cost_usd", 0.0) or 0.0)
+    total_requests = int(summary.get("total_requests", 0) or 0)
+    total_in = int(summary.get("total_input_tokens", 0) or 0)
+    total_out = int(summary.get("total_output_tokens", 0) or 0)
+
+    lines: list[str] = []
+    lines.append(f"# {title}")
+    lines.append("")
+    lines.append("## Summary")
+    lines.append("")
+    lines.append("| Metric | Value |")
+    lines.append("|---|---|")
+    lines.append(f"| Total cost (USD) | ${total_cost:.6f} |")
+    lines.append(f"| Total requests | {total_requests:,} |")
+    lines.append(f"| Input tokens | {total_in:,} |")
+    lines.append(f"| Output tokens | {total_out:,} |")
+    lines.append(f"| Total tokens | {total_in + total_out:,} |")
+    if total_requests:
+        lines.append(f"| Avg cost per request | ${total_cost / total_requests:.6f} |")
+    lines.append("")
+
+    if cost_by_model:
+        lines.append("## Cost by model")
+        lines.append("")
+        lines.append("| Model | Cost (USD) | Share |")
+        lines.append("|---|---|---|")
+        for model, cost in sorted(cost_by_model.items(), key=lambda x: -float(x[1])):
+            cost_f = float(cost)
+            share = (cost_f / total_cost * 100) if total_cost else 0
+            lines.append(f"| `{model}` | ${cost_f:.6f} | {share:.1f}% |")
+        lines.append("")
+
+    records = tracker.records
+    if records:
+        lines.append(f"## Recent calls (showing up to {min(10, len(records))})")
+        lines.append("")
+        lines.append("| # | Model | Input | Output | Cost (USD) |")
+        lines.append("|---|---|---|---|---|")
+        # Most recent first
+        for i, rec in enumerate(reversed(records[-10:]), 1):
+            lines.append(
+                f"| {i} | `{rec.model}` | {rec.input_tokens:,} | "
+                f"{rec.output_tokens:,} | ${rec.cost:.6f} |"
+            )
+        lines.append("")
+
+    return "\n".join(lines)
+
+
 def save_json(tracker: CostTracker, path: str, indent: int = 2) -> None:
     """Write JSON export to a file."""
     with open(path, "w") as f:
@@ -80,3 +137,9 @@ def save_csv(tracker: CostTracker, path: str) -> None:
     """Write CSV export to a file."""
     with open(path, "w") as f:
         f.write(to_csv(tracker))
+
+
+def save_markdown(tracker: CostTracker, path: str, title: str = "LLM Cost Report") -> None:
+    """Write markdown export to a file."""
+    with open(path, "w") as f:
+        f.write(to_markdown(tracker, title=title))
