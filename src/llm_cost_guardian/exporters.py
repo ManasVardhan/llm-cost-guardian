@@ -21,6 +21,7 @@ def to_json(tracker: CostTracker, indent: int = 2) -> str:
             "cost_usd": round(r.cost, 8),
             "timestamp": r.timestamp,
             "metadata": r.metadata,
+            "tags": list(r.tags),
         }
         for r in tracker.records
     ]
@@ -35,9 +36,18 @@ def to_csv(tracker: CostTracker) -> str:
     """Export all records as a CSV string."""
     buf = io.StringIO()
     writer = csv.writer(buf)
-    writer.writerow(["timestamp", "model", "input_tokens", "output_tokens", "cost_usd"])
+    writer.writerow(["timestamp", "model", "input_tokens", "output_tokens", "cost_usd", "tags"])
     for r in tracker.records:
-        writer.writerow([r.timestamp, r.model, r.input_tokens, r.output_tokens, round(r.cost, 8)])
+        writer.writerow(
+            [
+                r.timestamp,
+                r.model,
+                r.input_tokens,
+                r.output_tokens,
+                round(r.cost, 8),
+                ";".join(r.tags),
+            ]
+        )
     return buf.getvalue()
 
 
@@ -66,6 +76,13 @@ def to_prometheus(tracker: CostTracker, prefix: str = "llm_cost_guardian") -> st
     for model, cost in tracker.cost_by_model().items():
         lines.append(f'{prefix}_cost_by_model_usd{{model="{model}"}} {cost:.8f}')
 
+    cost_by_tag = tracker.cost_by_tag()
+    if cost_by_tag:
+        lines.append(f"# HELP {prefix}_cost_by_tag_usd Cost per tag in USD")
+        lines.append(f"# TYPE {prefix}_cost_by_tag_usd gauge")
+        for tag, cost in cost_by_tag.items():
+            lines.append(f'{prefix}_cost_by_tag_usd{{tag="{tag}"}} {cost:.8f}')
+
     lines.append("")
     return "\n".join(lines)
 
@@ -76,12 +93,11 @@ def to_markdown(tracker: CostTracker, title: str = "LLM Cost Report") -> str:
     Includes a summary header, a per-model breakdown table, and a recent calls
     table. Designed for pasting into pull requests, issues, or chat threads.
     """
-    summary = tracker.summary()
-    cost_by_model = summary.get("cost_by_model", {}) or {}
-    total_cost = float(summary.get("total_cost_usd", 0.0) or 0.0)
-    total_requests = int(summary.get("total_requests", 0) or 0)
-    total_in = int(summary.get("total_input_tokens", 0) or 0)
-    total_out = int(summary.get("total_output_tokens", 0) or 0)
+    cost_by_model = tracker.cost_by_model()
+    total_cost = tracker.total_cost
+    total_requests = len(tracker.records)
+    total_in = tracker.total_input_tokens
+    total_out = tracker.total_output_tokens
 
     lines: list[str] = []
     lines.append(f"# {title}")
@@ -104,10 +120,20 @@ def to_markdown(tracker: CostTracker, title: str = "LLM Cost Report") -> str:
         lines.append("")
         lines.append("| Model | Cost (USD) | Share |")
         lines.append("|---|---|---|")
-        for model, cost in sorted(cost_by_model.items(), key=lambda x: -float(x[1])):
-            cost_f = float(cost)
-            share = (cost_f / total_cost * 100) if total_cost else 0
-            lines.append(f"| `{model}` | ${cost_f:.6f} | {share:.1f}% |")
+        for model, cost in sorted(cost_by_model.items(), key=lambda x: -x[1]):
+            share = (cost / total_cost * 100) if total_cost else 0
+            lines.append(f"| `{model}` | ${cost:.6f} | {share:.1f}% |")
+        lines.append("")
+
+    cost_by_tag = tracker.cost_by_tag()
+    if cost_by_tag:
+        lines.append("## Cost by tag")
+        lines.append("")
+        lines.append("| Tag | Cost (USD) | Share |")
+        lines.append("|---|---|---|")
+        for tag, cost in sorted(cost_by_tag.items(), key=lambda x: -x[1]):
+            share = (cost / total_cost * 100) if total_cost else 0
+            lines.append(f"| `{tag}` | ${cost:.6f} | {share:.1f}% |")
         lines.append("")
 
     records = tracker.records

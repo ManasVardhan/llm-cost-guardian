@@ -19,7 +19,7 @@ from .exporters import (
     to_prometheus,
 )
 from .models import ModelPricing, Provider, get_pricing, list_models, register_model
-from .tracker import CostTracker, UsageRecord
+from .tracker import UNTAGGED, CostTracker, UsageRecord
 from .wrappers import TrackedAnthropic, TrackedOpenAI
 
 __version__ = "0.1.1"
@@ -37,6 +37,7 @@ __all__ = [
     "SoftWarningPolicy",
     "TrackedAnthropic",
     "TrackedOpenAI",
+    "UNTAGGED",
     "UsageRecord",
     "get_pricing",
     "list_models",

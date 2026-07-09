@@ -4,10 +4,26 @@ from __future__ import annotations
 
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
 from .models import get_pricing
+
+UNTAGGED = "(untagged)"
+
+
+def _normalize_tags(tags: Sequence[str] | None) -> tuple[str, ...]:
+    """Normalize a tag sequence: strip whitespace, drop empties, dedupe in order."""
+    if not tags:
+        return ()
+    seen: dict[str, None] = {}
+    for tag in tags:
+        if not isinstance(tag, str):
+            raise TypeError(f"Tags must be strings, got {type(tag).__name__}: {tag!r}")
+        cleaned = tag.strip()
+        if cleaned:
+            seen[cleaned] = None
+    return tuple(seen)
 
 
 @dataclass(slots=True)
@@ -20,6 +36,7 @@ class UsageRecord:
     cost: float
     timestamp: float = field(default_factory=time.time)
     metadata: dict[str, str] = field(default_factory=dict)
+    tags: tuple[str, ...] = ()
 
     @property
     def total_tokens(self) -> int:
@@ -56,8 +73,14 @@ class CostTracker:
         *,
         cost: float | None = None,
         metadata: dict[str, str] | None = None,
+        tags: Sequence[str] | None = None,
     ) -> UsageRecord:
-        """Record a single API call. If *cost* is None it is calculated from pricing data."""
+        """Record a single API call. If *cost* is None it is calculated from pricing data.
+
+        *tags* is an optional sequence of labels (project, environment, feature)
+        used to group costs. Whitespace is stripped, empty tags are dropped, and
+        duplicates are removed while preserving order.
+        """
         if input_tokens < 0 or output_tokens < 0:
             raise ValueError(
                 f"Token counts must be non-negative, got input_tokens={input_tokens}, "
@@ -73,6 +96,7 @@ class CostTracker:
             output_tokens=output_tokens,
             cost=cost,
             metadata=metadata or {},
+            tags=_normalize_tags(tags),
         )
 
         with self._lock:
@@ -123,6 +147,29 @@ class CostTracker:
         with self._lock:
             return self._cost_by_model_unlocked()
 
+    def _cost_by_tag_unlocked(self) -> dict[str, float]:
+        if not any(r.tags for r in self._records):
+            return {}
+        result: dict[str, float] = {}
+        for r in self._records:
+            if r.tags:
+                for tag in r.tags:
+                    result[tag] = result.get(tag, 0.0) + r.cost
+            else:
+                result[UNTAGGED] = result.get(UNTAGGED, 0.0) + r.cost
+        return result
+
+    def cost_by_tag(self) -> dict[str, float]:
+        """Return a mapping of tag to cumulative cost.
+
+        Records without tags are grouped under ``"(untagged)"``. Returns an
+        empty dict when no record has any tags. A record with multiple tags
+        contributes its full cost to each of its tags, so the sum across tags
+        can exceed ``total_cost``.
+        """
+        with self._lock:
+            return self._cost_by_tag_unlocked()
+
     def reset(self) -> None:
         """Clear all tracked data."""
         with self._lock:
@@ -152,9 +199,10 @@ class CostTracker:
         since: float | None = None,
         until: float | None = None,
         min_cost: float | None = None,
+        tag: str | None = None,
         predicate: Callable[[UsageRecord], bool] | None = None,
     ) -> list[UsageRecord]:
-        """Filter records by model name, time range, minimum cost, or custom predicate.
+        """Filter records by model name, time range, minimum cost, tag, or custom predicate.
 
         Parameters
         ----------
@@ -162,6 +210,7 @@ class CostTracker:
         since : only include records with timestamp >= this value
         until : only include records with timestamp <= this value
         min_cost : only include records with cost >= this value
+        tag : only include records carrying this tag (exact match)
         predicate : custom filter function applied to each record
 
         Returns
@@ -178,6 +227,8 @@ class CostTracker:
             results = [r for r in results if r.timestamp <= until]
         if min_cost is not None:
             results = [r for r in results if r.cost >= min_cost]
+        if tag is not None:
+            results = [r for r in results if tag in r.tags]
         if predicate is not None:
             results = [r for r in results if predicate(r)]
         return results
@@ -191,4 +242,5 @@ class CostTracker:
                 "total_output_tokens": self._total_output_tokens,
                 "total_requests": len(self._records),
                 "cost_by_model": self._cost_by_model_unlocked(),
+                "cost_by_tag": self._cost_by_tag_unlocked(),
             }

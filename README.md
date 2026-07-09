@@ -164,6 +164,30 @@ print(to_prometheus(tracker))
 save_json(tracker, "usage_report.json")
 ```
 
+### Tag-Based Cost Grouping
+
+Attach tags (project, environment, feature) to any call and group costs by tag:
+
+```python
+from llm_cost_guardian import CostTracker
+
+tracker = CostTracker()
+tracker.record("gpt-4o", 1500, 800, tags=["prod", "chatbot"])
+tracker.record("gpt-4o-mini", 2000, 600, tags=["dev"])
+tracker.record("gpt-4o-mini", 100, 50)  # untagged
+
+print(tracker.cost_by_tag())
+# {'prod': 0.0155, 'chatbot': 0.0155, 'dev': 0.00066, '(untagged)': 4.5e-05}
+
+# Filter records by tag (combines with model/since/until/min_cost)
+prod_calls = tracker.filter(tag="prod")
+```
+
+Tags flow through every exporter: JSON records carry a `tags` list, CSV gets a
+`tags` column (semicolon-separated), Prometheus emits a `cost_by_tag_usd` gauge,
+and markdown reports include a "Cost by tag" table. A call with multiple tags
+counts toward each of its tags.
+
 ### CLI Usage
 
 ```bash
@@ -176,6 +200,36 @@ llm-cost-guardian estimate gpt-4o --input-tokens 10000 --output-tokens 5000
 
 # View a saved report
 llm-cost-guardian report usage_report.json
+
+# Compare two reports side by side
+llm-cost-guardian compare before.json after.json
+
+# Most expensive calls in a report
+llm-cost-guardian top usage_report.json --limit 5
+
+# Cost distribution stats (mean, min/max, p50/p90/p99)
+llm-cost-guardian stats usage_report.json
+
+# Cost grouped by tag
+llm-cost-guardian tags usage_report.json
+llm-cost-guardian tags usage_report.json --json-output
+
+# Project spend forward from the observed window
+llm-cost-guardian forecast usage_report.json --days 30
+```
+
+Example `tags` output:
+
+```
+=== Cost by Tag ===
+Tag                               Calls         Cost    Share
+-------------------------------------------------------------
+prod                                  2 $   0.031000    66.0%
+chatbot                               1 $   0.015500    33.0%
+dev                                   1 $   0.015500    33.0%
+(untagged)                            1 $   0.000045     0.1%
+-------------------------------------------------------------
+Total                                 4 $   0.047000
 ```
 
 ### Prometheus Export

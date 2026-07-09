@@ -5,6 +5,9 @@
 ### 📁 CSV / JSON / Prometheus Export
 Export cost reports in CSV, JSON, and Prometheus text exposition formats for integration with billing systems, spreadsheets, monitoring stacks, or custom analytics pipelines.
 
+### 🏷️ Project and Tag-Based Grouping
+Group API calls by project, environment, or custom tags to get granular cost visibility across different workloads. Shipped as `tracker.record(..., tags=[...])`, `cost_by_tag()`, `filter(tag=...)`, a `tags` CLI command, and tag support in every exporter (JSON, CSV, Prometheus, markdown).
+
 ---
 
 ## v0.2 (Planned)
@@ -17,9 +20,6 @@ Track and attribute API costs to individual users or API keys. Enables team lead
 
 ### 📊 Dashboard TUI
 Interactive terminal dashboard (built with `rich` / `textual`) showing live cost breakdowns, trend graphs, and budget utilization at a glance.
-
-### 🏷️ Project and Tag-Based Grouping
-Group API calls by project, environment, or custom tags to get granular cost visibility across different workloads.
 
 ---
 

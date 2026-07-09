@@ -305,6 +305,72 @@ def stats(report_file: str, as_json: bool) -> None:
 
 @cli.command()
 @click.argument("report_file", type=click.Path(exists=True))
+@click.option("--json-output", "as_json", is_flag=True, help="Output as JSON.")
+def tags(report_file: str, as_json: bool) -> None:
+    """Show cost grouped by tag from a JSON report."""
+    data = _load_report(report_file)
+
+    records = data.get("records", [])
+    if not records:
+        click.echo("No records found in report.")
+        return
+
+    total_cost = 0.0
+    cost_by_tag: dict[str, float] = {}
+    calls_by_tag: dict[str, int] = {}
+    any_tags = False
+    for rec in records:
+        cost = float(rec.get("cost_usd", 0) or 0)
+        total_cost += cost
+        rec_tags = rec.get("tags") or []
+        if rec_tags:
+            any_tags = True
+        else:
+            rec_tags = ["(untagged)"]
+        for tag in rec_tags:
+            cost_by_tag[tag] = cost_by_tag.get(tag, 0.0) + cost
+            calls_by_tag[tag] = calls_by_tag.get(tag, 0) + 1
+
+    if not any_tags:
+        click.echo(
+            "No tags found in report. Record calls with tags=[...] to enable tag grouping."
+        )
+        return
+
+    rows = sorted(cost_by_tag.items(), key=lambda x: -x[1])
+
+    if as_json:
+        payload = {
+            "total_cost_usd": round(total_cost, 6),
+            "tags": [
+                {
+                    "tag": tag,
+                    "cost_usd": round(cost, 6),
+                    "calls": calls_by_tag[tag],
+                    "share_pct": round(cost / total_cost * 100, 2) if total_cost else 0,
+                }
+                for tag, cost in rows
+            ],
+        }
+        click.echo(json.dumps(payload, indent=2))
+        return
+
+    click.echo("=== Cost by Tag ===")
+    click.echo(f"{'Tag':<30} {'Calls':>8} {'Cost':>12} {'Share':>8}")
+    click.echo("-" * 61)
+    for tag, cost in rows:
+        share = (cost / total_cost * 100) if total_cost else 0
+        click.echo(f"{tag:<30} {calls_by_tag[tag]:>8,} ${cost:>11.6f} {share:>7.1f}%")
+    click.echo("-" * 61)
+    click.echo(f"{'Total':<30} {len(records):>8,} ${total_cost:>11.6f}")
+    click.echo(
+        "\nNote: calls with multiple tags count toward each tag, "
+        "so shares can sum past 100%."
+    )
+
+
+@cli.command()
+@click.argument("report_file", type=click.Path(exists=True))
 @click.option("--days", type=float, default=30.0, help="Forecast horizon in days (default 30).")
 @click.option("--json-output", "as_json", is_flag=True, help="Output as JSON.")
 def forecast(report_file: str, days: float, as_json: bool) -> None:
