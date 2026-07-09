@@ -413,9 +413,7 @@ class TestWrapperEdgeCases:
         mock_client = SimpleNamespace(
             chat=SimpleNamespace(
                 completions=SimpleNamespace(
-                    create=lambda **kw: SimpleNamespace(
-                        model="gpt-4o", usage=None, choices=[]
-                    )
+                    create=lambda **kw: SimpleNamespace(model="gpt-4o", usage=None, choices=[])
                 )
             )
         )
@@ -428,9 +426,7 @@ class TestWrapperEdgeCases:
     def test_openai_getattr_passthrough(self):
         """Attributes not overridden pass through to the real client."""
         mock_client = SimpleNamespace(
-            chat=SimpleNamespace(
-                completions=SimpleNamespace(create=lambda **kw: None)
-            ),
+            chat=SimpleNamespace(completions=SimpleNamespace(create=lambda **kw: None)),
             models=SimpleNamespace(list=lambda: ["gpt-4o"]),
         )
         tracker = CostTracker()

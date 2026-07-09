@@ -23,9 +23,7 @@ class TestRegisterModel:
         assert result.output_cost_per_1m == 15.0
 
     def test_register_with_context_window(self) -> None:
-        result = register_model(
-            "test-custom-v2", "anthropic", 3.0, 12.0, context_window=32_000
-        )
+        result = register_model("test-custom-v2", "anthropic", 3.0, 12.0, context_window=32_000)
         assert result.context_window == 32_000
 
     def test_registered_model_in_get_pricing(self) -> None:

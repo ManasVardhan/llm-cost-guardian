@@ -187,9 +187,7 @@ class TestExportersWithTags:
 
 class TestTagsCli:
     def _write_report(self, records):
-        f = tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False, encoding="utf-8"
-        )
+        f = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding="utf-8")
         json.dump({"summary": {}, "records": records}, f)
         f.close()
         return f.name

@@ -184,10 +184,20 @@ def test_stats_handles_missing_token_fields(runner):
 def test_forecast_human_output(runner):
     now = time.time()
     records = [
-        {"model": "gpt-4o", "input_tokens": 100, "output_tokens": 50, "cost_usd": 1.0,
-         "timestamp": now - 86400},  # 1 day ago
-        {"model": "gpt-4o", "input_tokens": 100, "output_tokens": 50, "cost_usd": 1.0,
-         "timestamp": now},  # now
+        {
+            "model": "gpt-4o",
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "cost_usd": 1.0,
+            "timestamp": now - 86400,
+        },  # 1 day ago
+        {
+            "model": "gpt-4o",
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "cost_usd": 1.0,
+            "timestamp": now,
+        },  # now
     ]
     path = _write_report(records)
     try:

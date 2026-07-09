@@ -65,8 +65,7 @@ class TestCLIModels:
         # Should not have Anthropic models
         lines = result.stdout.strip().split("\n")
         data_lines = [
-            ln for ln in lines
-            if ln.strip() and not ln.startswith("-") and "Model" not in ln
+            ln for ln in lines if ln.strip() and not ln.startswith("-") and "Model" not in ln
         ]
         for line in data_lines:
             assert "openai" in line.lower()

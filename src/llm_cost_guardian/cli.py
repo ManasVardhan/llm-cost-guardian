@@ -223,10 +223,7 @@ def top(report_file: str, limit: int, as_json: bool) -> None:
     if total > 0:
         pct = top_total / total * 100
         n_top = len(top_records)
-        click.echo(
-            f"\nTop {n_top} account for ${top_total:.6f}"
-            f" of ${total:.6f} total ({pct:.1f}%)"
-        )
+        click.echo(f"\nTop {n_top} account for ${top_total:.6f} of ${total:.6f} total ({pct:.1f}%)")
 
 
 @cli.command()
@@ -332,9 +329,7 @@ def tags(report_file: str, as_json: bool) -> None:
             calls_by_tag[tag] = calls_by_tag.get(tag, 0) + 1
 
     if not any_tags:
-        click.echo(
-            "No tags found in report. Record calls with tags=[...] to enable tag grouping."
-        )
+        click.echo("No tags found in report. Record calls with tags=[...] to enable tag grouping.")
         return
 
     rows = sorted(cost_by_tag.items(), key=lambda x: -x[1])
@@ -364,8 +359,7 @@ def tags(report_file: str, as_json: bool) -> None:
     click.echo("-" * 61)
     click.echo(f"{'Total':<30} {len(records):>8,} ${total_cost:>11.6f}")
     click.echo(
-        "\nNote: calls with multiple tags count toward each tag, "
-        "so shares can sum past 100%."
+        "\nNote: calls with multiple tags count toward each tag, so shares can sum past 100%."
     )
 
 

@@ -144,9 +144,7 @@ class BudgetManager:
             result = policy.evaluate(tracker)
             if result.action == Action.BLOCK:
                 return result
-            if worst is None or (
-                result.action == Action.WARN and worst.action == Action.ALLOW
-            ):
+            if worst is None or (result.action == Action.WARN and worst.action == Action.ALLOW):
                 worst = result
         assert worst is not None  # guaranteed since policies is non-empty
         return worst

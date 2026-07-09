@@ -49,6 +49,7 @@ class TestTrackedOpenAIExtended:
 
     def test_tracks_correct_model_from_response(self):
         """Wrapper should use the model from the response, not the request."""
+
         def create(**kw):
             return _make_openai_response(model="gpt-4o-2024-08-06")
 
@@ -70,9 +71,7 @@ class TestTrackedOpenAIExtended:
             choices=[SimpleNamespace(message=SimpleNamespace(content="Hello!"))],
         )
         mock_client = SimpleNamespace(
-            chat=SimpleNamespace(
-                completions=SimpleNamespace(create=lambda **kw: response_no_usage)
-            )
+            chat=SimpleNamespace(completions=SimpleNamespace(create=lambda **kw: response_no_usage))
         )
         tracker = CostTracker()
         client = TrackedOpenAI(mock_client, tracker)
@@ -84,9 +83,7 @@ class TestTrackedOpenAIExtended:
         """If response doesn't have a usage attribute at all."""
         response_raw = SimpleNamespace(model="gpt-4o", choices=[])
         mock_client = SimpleNamespace(
-            chat=SimpleNamespace(
-                completions=SimpleNamespace(create=lambda **kw: response_raw)
-            )
+            chat=SimpleNamespace(completions=SimpleNamespace(create=lambda **kw: response_raw))
         )
         tracker = CostTracker()
         client = TrackedOpenAI(mock_client, tracker)
@@ -133,6 +130,7 @@ class TestTrackedOpenAIExtended:
 
     def test_exception_from_client_propagates(self):
         """If the underlying client raises, it should propagate."""
+
         def failing_create(**kw):
             raise ConnectionError("API unreachable")
 
@@ -210,6 +208,7 @@ class TestTrackedAnthropicExtended:
 
     def test_tracks_correct_model_from_response(self):
         """Wrapper should use the model from the response."""
+
         def create(**kw):
             return _make_anthropic_response(model="claude-sonnet-4-20250514")
 
@@ -230,9 +229,7 @@ class TestTrackedAnthropicExtended:
         client = TrackedAnthropic(mock_client, tracker)
 
         for _ in range(3):
-            client.messages.create(
-                model="claude-sonnet-4-20250514", messages=[], max_tokens=100
-            )
+            client.messages.create(model="claude-sonnet-4-20250514", messages=[], max_tokens=100)
 
         assert len(tracker.records) == 3
         assert tracker.total_input_tokens == 300
@@ -240,6 +237,7 @@ class TestTrackedAnthropicExtended:
 
     def test_exception_from_client_propagates(self):
         """If the underlying client raises, it should propagate."""
+
         def failing_create(**kw):
             raise ConnectionError("API unreachable")
 
@@ -248,9 +246,7 @@ class TestTrackedAnthropicExtended:
         client = TrackedAnthropic(mock_client, tracker)
 
         with pytest.raises(ConnectionError, match="API unreachable"):
-            client.messages.create(
-                model="claude-sonnet-4-20250514", messages=[], max_tokens=100
-            )
+            client.messages.create(model="claude-sonnet-4-20250514", messages=[], max_tokens=100)
 
         assert len(tracker.records) == 0
 
@@ -285,9 +281,7 @@ class TestBudgetIntegration:
         tracker = CostTracker()
         # Burn budget within the window
         tracker.record("gpt-4o", 500_000, 500_000)
-        budget = BudgetManager(
-            policies=[SlidingWindowPolicy(limit_usd=0.001, window_seconds=3600)]
-        )
+        budget = BudgetManager(policies=[SlidingWindowPolicy(limit_usd=0.001, window_seconds=3600)])
         client = TrackedOpenAI(mock_client, tracker, budget)
         with pytest.raises(BudgetError):
             client.chat.completions.create(model="gpt-4o", messages=[])
