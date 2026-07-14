@@ -22,6 +22,7 @@ def to_json(tracker: CostTracker, indent: int = 2) -> str:
             "timestamp": r.timestamp,
             "metadata": r.metadata,
             "tags": list(r.tags),
+            "user": r.user,
         }
         for r in tracker.records
     ]
@@ -36,7 +37,9 @@ def to_csv(tracker: CostTracker) -> str:
     """Export all records as a CSV string."""
     buf = io.StringIO()
     writer = csv.writer(buf)
-    writer.writerow(["timestamp", "model", "input_tokens", "output_tokens", "cost_usd", "tags"])
+    writer.writerow(
+        ["timestamp", "model", "input_tokens", "output_tokens", "cost_usd", "tags", "user"]
+    )
     for r in tracker.records:
         writer.writerow(
             [
@@ -46,6 +49,7 @@ def to_csv(tracker: CostTracker) -> str:
                 r.output_tokens,
                 round(r.cost, 8),
                 ";".join(r.tags),
+                r.user or "",
             ]
         )
     return buf.getvalue()
@@ -82,6 +86,13 @@ def to_prometheus(tracker: CostTracker, prefix: str = "llm_cost_guardian") -> st
         lines.append(f"# TYPE {prefix}_cost_by_tag_usd gauge")
         for tag, cost in cost_by_tag.items():
             lines.append(f'{prefix}_cost_by_tag_usd{{tag="{tag}"}} {cost:.8f}')
+
+    cost_by_user = tracker.cost_by_user()
+    if cost_by_user:
+        lines.append(f"# HELP {prefix}_cost_by_user_usd Cost per user in USD")
+        lines.append(f"# TYPE {prefix}_cost_by_user_usd gauge")
+        for user, cost in cost_by_user.items():
+            lines.append(f'{prefix}_cost_by_user_usd{{user="{user}"}} {cost:.8f}')
 
     lines.append("")
     return "\n".join(lines)
@@ -134,6 +145,17 @@ def to_markdown(tracker: CostTracker, title: str = "LLM Cost Report") -> str:
         for tag, cost in sorted(cost_by_tag.items(), key=lambda x: -x[1]):
             share = (cost / total_cost * 100) if total_cost else 0
             lines.append(f"| `{tag}` | ${cost:.6f} | {share:.1f}% |")
+        lines.append("")
+
+    cost_by_user = tracker.cost_by_user()
+    if cost_by_user:
+        lines.append("## Cost by user")
+        lines.append("")
+        lines.append("| User | Cost (USD) | Share |")
+        lines.append("|---|---|---|")
+        for user, cost in sorted(cost_by_user.items(), key=lambda x: -x[1]):
+            share = (cost / total_cost * 100) if total_cost else 0
+            lines.append(f"| `{user}` | ${cost:.6f} | {share:.1f}% |")
         lines.append("")
 
     records = tracker.records

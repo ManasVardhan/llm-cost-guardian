@@ -155,7 +155,7 @@ class TestExportersWithTags:
     def test_csv_includes_tags_column(self):
         output = to_csv(self._tracker())
         lines = output.strip().splitlines()
-        assert lines[0].split(",")[-1] == "tags"
+        assert lines[0].split(",")[-2] == "tags"
         assert "prod;search" in lines[1]
 
     def test_csv_untagged_record_has_empty_cell(self):

@@ -10,6 +10,17 @@ from dataclasses import dataclass, field
 from .models import get_pricing
 
 UNTAGGED = "(untagged)"
+UNATTRIBUTED = "(unattributed)"
+
+
+def _normalize_user(user: str | None) -> str | None:
+    """Normalize a user identifier: strip whitespace, treat empty as None."""
+    if user is None:
+        return None
+    if not isinstance(user, str):
+        raise TypeError(f"User must be a string, got {type(user).__name__}: {user!r}")
+    cleaned = user.strip()
+    return cleaned or None
 
 
 def _normalize_tags(tags: Sequence[str] | None) -> tuple[str, ...]:
@@ -37,6 +48,7 @@ class UsageRecord:
     timestamp: float = field(default_factory=time.time)
     metadata: dict[str, str] = field(default_factory=dict)
     tags: tuple[str, ...] = ()
+    user: str | None = None
 
     @property
     def total_tokens(self) -> int:
@@ -74,12 +86,17 @@ class CostTracker:
         cost: float | None = None,
         metadata: dict[str, str] | None = None,
         tags: Sequence[str] | None = None,
+        user: str | None = None,
     ) -> UsageRecord:
         """Record a single API call. If *cost* is None it is calculated from pricing data.
 
         *tags* is an optional sequence of labels (project, environment, feature)
         used to group costs. Whitespace is stripped, empty tags are dropped, and
         duplicates are removed while preserving order.
+
+        *user* is an optional identifier (username, email, API key alias) that
+        attributes the call's cost to a person or key. Whitespace is stripped
+        and empty strings are treated as no attribution.
         """
         if input_tokens < 0 or output_tokens < 0:
             raise ValueError(
@@ -97,6 +114,7 @@ class CostTracker:
             cost=cost,
             metadata=metadata or {},
             tags=_normalize_tags(tags),
+            user=_normalize_user(user),
         )
 
         with self._lock:
@@ -170,6 +188,25 @@ class CostTracker:
         with self._lock:
             return self._cost_by_tag_unlocked()
 
+    def _cost_by_user_unlocked(self) -> dict[str, float]:
+        if not any(r.user for r in self._records):
+            return {}
+        result: dict[str, float] = {}
+        for r in self._records:
+            key = r.user if r.user else UNATTRIBUTED
+            result[key] = result.get(key, 0.0) + r.cost
+        return result
+
+    def cost_by_user(self) -> dict[str, float]:
+        """Return a mapping of user to cumulative cost.
+
+        Records without a user are grouped under ``"(unattributed)"``. Returns
+        an empty dict when no record has a user. Unlike tags, each record has
+        at most one user, so the sum across users always equals ``total_cost``.
+        """
+        with self._lock:
+            return self._cost_by_user_unlocked()
+
     def reset(self) -> None:
         """Clear all tracked data."""
         with self._lock:
@@ -200,9 +237,10 @@ class CostTracker:
         until: float | None = None,
         min_cost: float | None = None,
         tag: str | None = None,
+        user: str | None = None,
         predicate: Callable[[UsageRecord], bool] | None = None,
     ) -> list[UsageRecord]:
-        """Filter records by model name, time range, minimum cost, tag, or custom predicate.
+        """Filter records by model name, time range, minimum cost, tag, user, or custom predicate.
 
         Parameters
         ----------
@@ -211,6 +249,7 @@ class CostTracker:
         until : only include records with timestamp <= this value
         min_cost : only include records with cost >= this value
         tag : only include records carrying this tag (exact match)
+        user : only include records attributed to this user (exact match)
         predicate : custom filter function applied to each record
 
         Returns
@@ -229,6 +268,8 @@ class CostTracker:
             results = [r for r in results if r.cost >= min_cost]
         if tag is not None:
             results = [r for r in results if tag in r.tags]
+        if user is not None:
+            results = [r for r in results if r.user == user]
         if predicate is not None:
             results = [r for r in results if predicate(r)]
         return results
@@ -243,4 +284,5 @@ class CostTracker:
                 "total_requests": len(self._records),
                 "cost_by_model": self._cost_by_model_unlocked(),
                 "cost_by_tag": self._cost_by_tag_unlocked(),
+                "cost_by_user": self._cost_by_user_unlocked(),
             }

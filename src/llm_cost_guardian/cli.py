@@ -365,6 +365,67 @@ def tags(report_file: str, as_json: bool) -> None:
 
 @cli.command()
 @click.argument("report_file", type=click.Path(exists=True))
+@click.option("--json-output", "as_json", is_flag=True, help="Output as JSON.")
+def users(report_file: str, as_json: bool) -> None:
+    """Show cost attributed per user from a JSON report."""
+    data = _load_report(report_file)
+
+    records = data.get("records", [])
+    if not records:
+        click.echo("No records found in report.")
+        return
+
+    total_cost = 0.0
+    cost_by_user: dict[str, float] = {}
+    calls_by_user: dict[str, int] = {}
+    any_users = False
+    for rec in records:
+        cost = float(rec.get("cost_usd", 0) or 0)
+        total_cost += cost
+        user = rec.get("user") or None
+        if user:
+            any_users = True
+        else:
+            user = "(unattributed)"
+        cost_by_user[user] = cost_by_user.get(user, 0.0) + cost
+        calls_by_user[user] = calls_by_user.get(user, 0) + 1
+
+    if not any_users:
+        click.echo(
+            "No users found in report. Record calls with user=... to enable user attribution."
+        )
+        return
+
+    rows = sorted(cost_by_user.items(), key=lambda x: -x[1])
+
+    if as_json:
+        payload = {
+            "total_cost_usd": round(total_cost, 6),
+            "users": [
+                {
+                    "user": user,
+                    "cost_usd": round(cost, 6),
+                    "calls": calls_by_user[user],
+                    "share_pct": round(cost / total_cost * 100, 2) if total_cost else 0,
+                }
+                for user, cost in rows
+            ],
+        }
+        click.echo(json.dumps(payload, indent=2))
+        return
+
+    click.echo("=== Cost by User ===")
+    click.echo(f"{'User':<30} {'Calls':>8} {'Cost':>12} {'Share':>8}")
+    click.echo("-" * 61)
+    for user, cost in rows:
+        share = (cost / total_cost * 100) if total_cost else 0
+        click.echo(f"{user:<30} {calls_by_user[user]:>8,} ${cost:>11.6f} {share:>7.1f}%")
+    click.echo("-" * 61)
+    click.echo(f"{'Total':<30} {len(records):>8,} ${total_cost:>11.6f}")
+
+
+@cli.command()
+@click.argument("report_file", type=click.Path(exists=True))
 @click.option("--days", type=float, default=30.0, help="Forecast horizon in days (default 30).")
 @click.option("--json-output", "as_json", is_flag=True, help="Output as JSON.")
 def forecast(report_file: str, days: float, as_json: bool) -> None:

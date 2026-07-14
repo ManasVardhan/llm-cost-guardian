@@ -21,6 +21,7 @@ LLM API costs can spiral out of control fast - a single runaway loop can burn th
 - 📊 **Real-time cost tracking** - automatic per-call cost calculation from token usage
 - 🛡️ **Budget enforcement** - hard caps, soft warnings, and sliding window policies
 - 🔌 **Drop-in wrappers** - wrap OpenAI and Anthropic clients with one line of code
+- 👤 **Per-user cost attribution** - see who is spending what across users or API keys
 - 📈 **Prometheus export** - expose metrics for your monitoring stack
 - 💾 **JSON & CSV export** - save usage reports for analysis
 - 🖥️ **CLI tool** - estimate costs and view reports from the terminal
@@ -188,6 +189,31 @@ Tags flow through every exporter: JSON records carry a `tags` list, CSV gets a
 and markdown reports include a "Cost by tag" table. A call with multiple tags
 counts toward each of its tags.
 
+### Per-User Cost Attribution
+
+Attribute each call to a user, team member, or API key alias and see who is
+consuming what:
+
+```python
+from llm_cost_guardian import CostTracker
+
+tracker = CostTracker()
+tracker.record("gpt-4o", 1500, 800, user="alice")
+tracker.record("gpt-4o-mini", 2000, 600, user="bob")
+tracker.record("gpt-4o-mini", 100, 50)  # no attribution
+
+print(tracker.cost_by_user())
+# {'alice': 0.01175, 'bob': 0.00066, '(unattributed)': 4.5e-05}
+
+# Filter records by user (combines with model/since/until/min_cost/tag)
+alice_calls = tracker.filter(user="alice")
+```
+
+Unlike tags, each call has at most one user, so per-user costs always sum to
+the tracker total. Users flow through every exporter: JSON records carry a
+`user` field, CSV gets a `user` column, Prometheus emits a `cost_by_user_usd`
+gauge, and markdown reports include a "Cost by user" table.
+
 ### CLI Usage
 
 ```bash
@@ -213,6 +239,10 @@ llm-cost-guardian stats usage_report.json
 # Cost grouped by tag
 llm-cost-guardian tags usage_report.json
 llm-cost-guardian tags usage_report.json --json-output
+
+# Cost attributed per user
+llm-cost-guardian users usage_report.json
+llm-cost-guardian users usage_report.json --json-output
 
 # Project spend forward from the observed window
 llm-cost-guardian forecast usage_report.json --days 30
