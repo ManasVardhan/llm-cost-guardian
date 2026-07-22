@@ -497,6 +497,122 @@ def forecast(report_file: str, days: float, as_json: bool) -> None:
     click.echo(f"Projected over {days:g} days:  ${projected:.6f}")
 
 
+@cli.command()
+@click.argument("report_file", type=click.Path(exists=True))
+@click.option("--threshold", "-t", type=float, required=True, help="Alert threshold in USD.")
+@click.option("--model", default=None, help="Only count cost for this model.")
+@click.option("--tag", default=None, help="Only count cost for records carrying this tag.")
+@click.option("--user", default=None, help="Only count cost attributed to this user.")
+@click.option("--label", default=None, help="Display name used in the alert message.")
+@click.option("--slack-webhook", default=None, help="Slack incoming webhook URL.")
+@click.option("--discord-webhook", default=None, help="Discord webhook URL.")
+@click.option("--dry-run", is_flag=True, help="Print webhook payloads instead of sending.")
+@click.option("--json-output", "as_json", is_flag=True, help="Output as JSON.")
+def alert(
+    report_file: str,
+    threshold: float,
+    model: str | None,
+    tag: str | None,
+    user: str | None,
+    label: str | None,
+    slack_webhook: str | None,
+    discord_webhook: str | None,
+    dry_run: bool,
+    as_json: bool,
+) -> None:
+    """Check a JSON report against a cost threshold and send webhook alerts.
+
+    Exit codes: 0 when under threshold, 2 when the threshold is crossed,
+    1 on invalid input or webhook delivery failure. Designed for CI and
+    cron jobs: run it against a saved report and let Slack or Discord know
+    when spend crosses the line.
+    """
+    from .alerts import AlertEvent, AlertRule, DiscordWebhook, SlackWebhook, Webhook
+
+    data = _load_report(report_file)
+    records = data.get("records", [])
+
+    try:
+        rule = AlertRule(threshold, model=model, tag=tag, user=user, label=label)
+    except (TypeError, ValueError) as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+    matched_cost = 0.0
+    matched_calls = 0
+    for rec in records:
+        if model is not None and rec.get("model") != model:
+            continue
+        if tag is not None and tag not in (rec.get("tags") or []):
+            continue
+        if user is not None and rec.get("user") != user:
+            continue
+        matched_cost += float(rec.get("cost_usd", 0) or 0)
+        matched_calls += 1
+
+    triggered = matched_cost >= threshold
+    event = AlertEvent(rule=rule, current_cost=matched_cost)
+
+    webhooks: list[Webhook] = []
+    try:
+        if slack_webhook:
+            webhooks.append(SlackWebhook(slack_webhook))
+        if discord_webhook:
+            webhooks.append(DiscordWebhook(discord_webhook))
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+    delivery: list[dict[str, object]] = []
+    failures = 0
+    if triggered:
+        for webhook in webhooks:
+            kind = type(webhook).__name__
+            if dry_run:
+                payload = webhook.format_payload(event)
+                delivery.append({"webhook": kind, "dry_run": True, "payload": payload})
+            elif webhook.send(event):
+                delivery.append({"webhook": kind, "sent": True})
+            else:
+                failures += 1
+                delivery.append({"webhook": kind, "sent": False, "error": webhook.last_error})
+
+    if as_json:
+        payload_out = {
+            "threshold_usd": threshold,
+            "scope": rule.scope_description(),
+            "matched_calls": matched_calls,
+            "matched_cost_usd": round(matched_cost, 6),
+            "triggered": triggered,
+            "delivery": delivery,
+        }
+        click.echo(json.dumps(payload_out, indent=2))
+    else:
+        click.echo("=== Cost Alert Check ===")
+        click.echo(f"Scope:         {rule.scope_description()}")
+        click.echo(f"Matched calls: {matched_calls:,}")
+        click.echo(f"Matched cost:  ${matched_cost:.6f}")
+        click.echo(f"Threshold:     ${threshold:.2f}")
+        if triggered:
+            click.echo(f"\nALERT: {event.message}")
+            for entry in delivery:
+                if entry.get("dry_run"):
+                    click.echo(f"[dry-run] {entry['webhook']}: {json.dumps(entry['payload'])}")
+                elif entry.get("sent"):
+                    click.echo(f"Sent alert via {entry['webhook']}.")
+                else:
+                    click.echo(f"Failed to send via {entry['webhook']}: {entry['error']}", err=True)
+            if not webhooks:
+                click.echo("No webhooks configured; nothing sent.")
+        else:
+            click.echo("\nOK: under threshold.")
+
+    if failures:
+        sys.exit(1)
+    if triggered:
+        sys.exit(2)
+
+
 def main() -> None:
     cli()
 

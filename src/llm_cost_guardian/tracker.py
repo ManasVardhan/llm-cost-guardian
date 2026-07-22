@@ -77,6 +77,15 @@ class CostTracker:
 
     # -- Public API ----------------------------------------------------------
 
+    @property
+    def on_record(self) -> CostCallback | None:
+        """The callback invoked after every record, or None."""
+        return self._on_record
+
+    @on_record.setter
+    def on_record(self, callback: CostCallback | None) -> None:
+        self._on_record = callback
+
     def record(
         self,
         model: str,

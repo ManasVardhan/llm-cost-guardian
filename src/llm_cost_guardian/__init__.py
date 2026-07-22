@@ -1,5 +1,13 @@
 """LLM Cost Guardian - Real-time cost monitoring and budget enforcement for LLM API calls."""
 
+from .alerts import (
+    AlertEvent,
+    AlertRule,
+    CostAlerter,
+    DiscordWebhook,
+    SlackWebhook,
+    Webhook,
+)
 from .budget import (
     Action,
     BudgetError,
@@ -26,13 +34,18 @@ __version__ = "0.1.1"
 
 __all__ = [
     "Action",
+    "AlertEvent",
+    "AlertRule",
     "BudgetError",
     "BudgetManager",
     "BudgetResult",
+    "CostAlerter",
     "CostTracker",
+    "DiscordWebhook",
     "HardCapPolicy",
     "ModelPricing",
     "Provider",
+    "SlackWebhook",
     "SlidingWindowPolicy",
     "SoftWarningPolicy",
     "TrackedAnthropic",
@@ -40,6 +53,7 @@ __all__ = [
     "UNATTRIBUTED",
     "UNTAGGED",
     "UsageRecord",
+    "Webhook",
     "get_pricing",
     "list_models",
     "register_model",

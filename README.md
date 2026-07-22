@@ -22,6 +22,7 @@ LLM API costs can spiral out of control fast - a single runaway loop can burn th
 - 🛡️ **Budget enforcement** - hard caps, soft warnings, and sliding window policies
 - 🔌 **Drop-in wrappers** - wrap OpenAI and Anthropic clients with one line of code
 - 👤 **Per-user cost attribution** - see who is spending what across users or API keys
+- 🔔 **Slack / Discord alerts** - webhook notifications when spend crosses thresholds
 - 📈 **Prometheus export** - expose metrics for your monitoring stack
 - 💾 **JSON & CSV export** - save usage reports for analysis
 - 🖥️ **CLI tool** - estimate costs and view reports from the terminal
@@ -214,6 +215,48 @@ the tracker total. Users flow through every exporter: JSON records carry a
 `user` field, CSV gets a `user` column, Prometheus emits a `cost_by_user_usd`
 gauge, and markdown reports include a "Cost by user" table.
 
+### Slack / Discord Webhook Alerts
+
+Get pinged in Slack or Discord the moment spend crosses a threshold. Rules can
+watch total cost or be scoped to a model, a tag, a user, or any combination.
+Each rule fires at most once (until `reset()`), and webhook failures are
+swallowed so alerting can never break your application:
+
+```python
+from llm_cost_guardian import CostAlerter, CostTracker, DiscordWebhook, SlackWebhook
+
+alerter = CostAlerter(
+    [
+        SlackWebhook("https://hooks.slack.com/services/T000/B000/XXXX"),
+        DiscordWebhook("https://discord.com/api/webhooks/123/abc"),
+    ]
+)
+alerter.add_rule(10.0, label="daily-budget")           # total spend
+alerter.add_rule(5.0, model="gpt-4o", label="gpt-4o")  # per-model
+alerter.add_rule(2.0, tag="prod", user="alice")        # scoped combos
+
+tracker = CostTracker()
+alerter.attach(tracker)  # checks run automatically after every record()
+
+tracker.record("gpt-4o", 500_000, 250_000)  # fires when a threshold crosses
+```
+
+You can also call `alerter.check(tracker)` manually, inspect
+`alerter.fired_rules`, and `alerter.reset()` to re-arm (for example at the
+start of each day). Uses only the standard library, no extra dependencies.
+
+For CI or cron, the `alert` CLI command checks a saved report and notifies:
+
+```bash
+# Exit 0 under threshold, 2 when crossed, 1 on delivery failure
+llm-cost-guardian alert usage_report.json -t 10 \
+  --slack-webhook https://hooks.slack.com/services/T000/B000/XXXX
+
+# Scope to a model or tag, preview the payload without sending
+llm-cost-guardian alert usage_report.json -t 5 --model gpt-4o --dry-run
+llm-cost-guardian alert usage_report.json -t 2 --tag prod --json-output
+```
+
 ### CLI Usage
 
 ```bash
@@ -246,6 +289,9 @@ llm-cost-guardian users usage_report.json --json-output
 
 # Project spend forward from the observed window
 llm-cost-guardian forecast usage_report.json --days 30
+
+# Check a report against a threshold and alert Slack/Discord
+llm-cost-guardian alert usage_report.json -t 10 --slack-webhook https://hooks.slack.com/...
 ```
 
 Example `tags` output:
