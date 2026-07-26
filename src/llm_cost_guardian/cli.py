@@ -426,6 +426,91 @@ def users(report_file: str, as_json: bool) -> None:
 
 @cli.command()
 @click.argument("report_file", type=click.Path(exists=True))
+@click.option("--days", "-n", type=int, default=None, help="Show only the most recent N days.")
+@click.option("--utc", is_flag=True, help="Bucket days by UTC instead of local time.")
+@click.option("--json-output", "as_json", is_flag=True, help="Output as JSON.")
+def daily(report_file: str, days: int | None, utc: bool, as_json: bool) -> None:
+    """Show cost per calendar day from a JSON report."""
+    from datetime import datetime, timezone
+
+    data = _load_report(report_file)
+
+    records = data.get("records", [])
+    if not records:
+        click.echo("No records found in report.")
+        return
+
+    if days is not None and days < 1:
+        click.echo(f"Error: --days must be at least 1, got {days}.", err=True)
+        sys.exit(1)
+
+    tz = timezone.utc if utc else None
+    cost_by_day: dict[str, float] = {}
+    calls_by_day: dict[str, int] = {}
+    tokens_by_day: dict[str, int] = {}
+    unknown_key = "(unknown)"
+    for rec in records:
+        cost = float(rec.get("cost_usd", 0) or 0)
+        tokens = int(rec.get("input_tokens", 0) or 0) + int(rec.get("output_tokens", 0) or 0)
+        raw_ts = rec.get("timestamp")
+        try:
+            ts = float(raw_ts)  # type: ignore[arg-type]
+            day = datetime.fromtimestamp(ts, tz=tz).date().isoformat() if ts > 0 else unknown_key
+        except (TypeError, ValueError, OSError, OverflowError):
+            day = unknown_key
+        cost_by_day[day] = cost_by_day.get(day, 0.0) + cost
+        calls_by_day[day] = calls_by_day.get(day, 0) + 1
+        tokens_by_day[day] = tokens_by_day.get(day, 0) + tokens
+
+    has_unknown = unknown_key in cost_by_day
+    day_keys = sorted(k for k in cost_by_day if k != unknown_key)
+    if days is not None:
+        day_keys = day_keys[-days:]
+    if has_unknown:
+        day_keys.append(unknown_key)
+
+    total_cost = sum(cost_by_day[k] for k in day_keys)
+    total_calls = sum(calls_by_day[k] for k in day_keys)
+    total_tokens = sum(tokens_by_day[k] for k in day_keys)
+
+    if as_json:
+        payload = {
+            "total_cost_usd": round(total_cost, 6),
+            "timezone": "utc" if utc else "local",
+            "days": [
+                {
+                    "day": key,
+                    "calls": calls_by_day[key],
+                    "tokens": tokens_by_day[key],
+                    "cost_usd": round(cost_by_day[key], 6),
+                    "share_pct": (
+                        round(cost_by_day[key] / total_cost * 100, 2) if total_cost else 0
+                    ),
+                }
+                for key in day_keys
+            ],
+        }
+        click.echo(json.dumps(payload, indent=2))
+        return
+
+    max_cost = max((cost_by_day[k] for k in day_keys), default=0.0)
+    bar_width = 24
+    line_width = 45 + bar_width
+    click.echo(f"=== Cost by Day ({'UTC' if utc else 'local'}) ===")
+    click.echo(f"{'Day':<12} {'Calls':>7} {'Tokens':>10} {'Cost':>12}")
+    click.echo("-" * line_width)
+    for key in day_keys:
+        cost = cost_by_day[key]
+        bar = "#" * round(cost / max_cost * bar_width) if max_cost > 0 else ""
+        click.echo(
+            f"{key:<12} {calls_by_day[key]:>7,} {tokens_by_day[key]:>10,} ${cost:>11.6f}  {bar}"
+        )
+    click.echo("-" * line_width)
+    click.echo(f"{'Total':<12} {total_calls:>7,} {total_tokens:>10,} ${total_cost:>11.6f}")
+
+
+@cli.command()
+@click.argument("report_file", type=click.Path(exists=True))
 @click.option("--days", type=float, default=30.0, help="Forecast horizon in days (default 30).")
 @click.option("--json-output", "as_json", is_flag=True, help="Output as JSON.")
 def forecast(report_file: str, days: float, as_json: bool) -> None:

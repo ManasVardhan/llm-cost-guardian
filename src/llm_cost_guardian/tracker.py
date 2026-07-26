@@ -6,6 +6,7 @@ import threading
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 
 from .models import get_pricing
 
@@ -215,6 +216,24 @@ class CostTracker:
         """
         with self._lock:
             return self._cost_by_user_unlocked()
+
+    def _cost_by_day_unlocked(self, *, utc: bool) -> dict[str, float]:
+        tz = timezone.utc if utc else None
+        result: dict[str, float] = {}
+        for r in self._records:
+            day = datetime.fromtimestamp(r.timestamp, tz=tz).date().isoformat()
+            result[day] = result.get(day, 0.0) + r.cost
+        return dict(sorted(result.items()))
+
+    def cost_by_day(self, *, utc: bool = False) -> dict[str, float]:
+        """Return a mapping of calendar day (YYYY-MM-DD) to cumulative cost.
+
+        Days are keyed in the local timezone by default; pass ``utc=True``
+        to bucket by UTC dates instead. Keys are sorted chronologically.
+        Returns an empty dict when there are no records.
+        """
+        with self._lock:
+            return self._cost_by_day_unlocked(utc=utc)
 
     def reset(self) -> None:
         """Clear all tracked data."""

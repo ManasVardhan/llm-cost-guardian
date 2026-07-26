@@ -22,6 +22,7 @@ LLM API costs can spiral out of control fast - a single runaway loop can burn th
 - 🛡️ **Budget enforcement** - hard caps, soft warnings, and sliding window policies
 - 🔌 **Drop-in wrappers** - wrap OpenAI and Anthropic clients with one line of code
 - 👤 **Per-user cost attribution** - see who is spending what across users or API keys
+- 📅 **Daily cost breakdown** - per-day spend with `cost_by_day()` and a `daily` CLI bar chart
 - 🔔 **Slack / Discord alerts** - webhook notifications when spend crosses thresholds
 - 📈 **Prometheus export** - expose metrics for your monitoring stack
 - 💾 **JSON & CSV export** - save usage reports for analysis
@@ -215,6 +216,35 @@ the tracker total. Users flow through every exporter: JSON records carry a
 `user` field, CSV gets a `user` column, Prometheus emits a `cost_by_user_usd`
 gauge, and markdown reports include a "Cost by user" table.
 
+### Daily Cost Breakdown
+
+See how spend evolves day by day. In Python, `cost_by_day()` buckets records
+into calendar days (local time by default, `utc=True` for UTC dates):
+
+```python
+print(tracker.cost_by_day())
+# {'2026-07-24': 0.0312, '2026-07-25': 0.0158}
+```
+
+The `daily` CLI command renders the same view from a saved report, with an
+ASCII bar chart scaled to the most expensive day:
+
+```
+$ llm-cost-guardian daily usage_report.json
+=== Cost by Day (local) ===
+Day            Calls     Tokens         Cost
+---------------------------------------------------------------------
+2026-07-23         4      9,300 $   0.014500  ###########
+2026-07-24        11     24,800 $   0.031200  ########################
+2026-07-25         6     12,100 $   0.015800  ############
+---------------------------------------------------------------------
+Total             21     46,200 $   0.061500
+```
+
+Use `--days 7` to keep only the most recent days, `--utc` for UTC bucketing,
+and `--json-output` for machine-readable output. Records without a usable
+timestamp are grouped under `(unknown)` at the end.
+
 ### Slack / Discord Webhook Alerts
 
 Get pinged in Slack or Discord the moment spend crosses a threshold. Rules can
@@ -286,6 +316,10 @@ llm-cost-guardian tags usage_report.json --json-output
 # Cost attributed per user
 llm-cost-guardian users usage_report.json
 llm-cost-guardian users usage_report.json --json-output
+
+# Cost per calendar day with a bar chart
+llm-cost-guardian daily usage_report.json
+llm-cost-guardian daily usage_report.json --utc --days 7 --json-output
 
 # Project spend forward from the observed window
 llm-cost-guardian forecast usage_report.json --days 30
