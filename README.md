@@ -24,6 +24,7 @@ LLM API costs can spiral out of control fast - a single runaway loop can burn th
 - 👤 **Per-user cost attribution** - see who is spending what across users or API keys
 - 📅 **Daily cost breakdown** - per-day spend with `cost_by_day()` and a `daily` CLI bar chart
 - 🔔 **Slack / Discord alerts** - webhook notifications when spend crosses thresholds
+- 📟 **Terminal dashboard** - `dashboard` CLI with budget gauge, trends, and live `--watch` mode
 - 📈 **Prometheus export** - expose metrics for your monitoring stack
 - 💾 **JSON & CSV export** - save usage reports for analysis
 - 🖥️ **CLI tool** - estimate costs and view reports from the terminal
@@ -287,6 +288,36 @@ llm-cost-guardian alert usage_report.json -t 5 --model gpt-4o --dry-run
 llm-cost-guardian alert usage_report.json -t 2 --tag prod --json-output
 ```
 
+### Terminal Dashboard
+
+Get the whole picture in one screen: totals, budget utilization, cost by
+model, a daily trend chart, top tags and users, and the most expensive calls.
+The dashboard renders with [rich](https://github.com/Textualize/rich), which
+ships as an optional extra:
+
+```bash
+pip install "llm-cost-guardian[dashboard]"
+
+# One-shot render
+llm-cost-guardian dashboard usage_report.json --budget 50
+
+# Live mode: re-reads the report every 5 seconds until Ctrl+C
+llm-cost-guardian dashboard usage_report.json --budget 50 --watch 5
+```
+
+The budget gauge turns yellow at 80% utilization and red when you are over
+budget. Use `--top N` to size the breakdown sections, `--utc` to bucket the
+daily trend by UTC dates, and `--json-output` to get the computed dashboard
+data as JSON (works without rich installed, handy for scripting).
+
+Live mode pairs well with a tracker that periodically calls
+`save_json(tracker, "usage_report.json")`: point `--watch` at the file and
+watch spend evolve in real time. Partially written files are skipped, the
+dashboard just keeps the last good frame.
+
+The same data is available in Python via `build_dashboard_data(report_dict)`
+and can be rendered anywhere rich renders with `render_dashboard(dash)`.
+
 ### CLI Usage
 
 ```bash
@@ -326,6 +357,9 @@ llm-cost-guardian forecast usage_report.json --days 30
 
 # Check a report against a threshold and alert Slack/Discord
 llm-cost-guardian alert usage_report.json -t 10 --slack-webhook https://hooks.slack.com/...
+
+# Terminal dashboard (requires the [dashboard] extra)
+llm-cost-guardian dashboard usage_report.json --budget 50 --watch 5
 ```
 
 Example `tags` output:

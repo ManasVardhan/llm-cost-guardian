@@ -17,6 +17,7 @@ from .budget import (
     SlidingWindowPolicy,
     SoftWarningPolicy,
 )
+from .dashboard import build_dashboard_data, render_dashboard
 from .exporters import (
     save_csv,
     save_json,
@@ -54,9 +55,11 @@ __all__ = [
     "UNTAGGED",
     "UsageRecord",
     "Webhook",
+    "build_dashboard_data",
     "get_pricing",
     "list_models",
     "register_model",
+    "render_dashboard",
     "save_csv",
     "save_json",
     "save_markdown",

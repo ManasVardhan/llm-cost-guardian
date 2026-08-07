@@ -26,9 +26,10 @@ classifiers = [
 dependencies = ["click>=8.0"]
 
 [project.optional-dependencies]
-dev = ["pytest>=7.0", "ruff>=0.4"]
+dev = ["pytest>=7.0", "ruff>=0.4", "rich>=13.0"]
 openai = ["openai>=1.0"]
 anthropic = ["anthropic>=0.20"]
+dashboard = ["rich>=13.0"]
 
 [project.scripts]
 llm-cost-guardian = "llm_cost_guardian.cli:main"

@@ -698,6 +698,96 @@ def alert(
         sys.exit(2)
 
 
+@cli.command()
+@click.argument("report_file", type=click.Path(exists=True))
+@click.option("--budget", type=float, default=None, help="Budget in USD for the utilization gauge.")
+@click.option(
+    "--watch",
+    type=float,
+    default=None,
+    help="Re-read the report and refresh every N seconds until Ctrl+C.",
+)
+@click.option("--utc", is_flag=True, help="Bucket the daily trend by UTC instead of local time.")
+@click.option("--top", "top_n", type=int, default=5, help="Rows per section (default 5).")
+@click.option(
+    "--json-output",
+    "as_json",
+    is_flag=True,
+    help="Print the computed dashboard data as JSON (no rich required).",
+)
+def dashboard(
+    report_file: str,
+    budget: float | None,
+    watch: float | None,
+    utc: bool,
+    top_n: int,
+    as_json: bool,
+) -> None:
+    """Show a terminal dashboard for a JSON report.
+
+    Renders totals, budget utilization, cost by model, a daily trend chart,
+    top tags and users, and the most expensive calls. Pass --watch N to keep
+    the dashboard live while the report file is being rewritten. Requires the
+    "rich" extra: pip install "llm-cost-guardian[dashboard]".
+    """
+    from .dashboard import build_dashboard_data
+
+    def build(data: dict) -> dict:
+        try:
+            return build_dashboard_data(data, budget=budget, utc=utc, top=top_n)
+        except ValueError as e:
+            click.echo(f"Error: {e}", err=True)
+            sys.exit(1)
+
+    data = _load_report(report_file)
+    dash = build(data)
+
+    if as_json:
+        click.echo(json.dumps(dash, indent=2))
+        return
+
+    try:
+        from rich.console import Console
+    except ImportError:
+        click.echo(
+            "Error: the dashboard requires the 'rich' package.\n"
+            'Install it with: pip install "llm-cost-guardian[dashboard]"',
+            err=True,
+        )
+        sys.exit(1)
+
+    from .dashboard import render_dashboard
+
+    console = Console()
+    if watch is None:
+        console.print(render_dashboard(dash))
+        return
+
+    if watch <= 0:
+        click.echo(f"Error: --watch must be positive, got {watch}.", err=True)
+        sys.exit(1)
+
+    import time
+
+    from rich.live import Live
+
+    title = f"LLM Cost Guardian (watching {report_file}, every {watch:g}s)"
+    try:
+        with Live(render_dashboard(dash, title=title), console=console, screen=False) as live:
+            while True:
+                time.sleep(watch)
+                try:
+                    with open(report_file) as f:
+                        data = json.load(f)
+                    if isinstance(data, dict):
+                        dash = build(data)
+                except (OSError, json.JSONDecodeError):
+                    continue  # keep the last good frame while the file is mid-write
+                live.update(render_dashboard(dash, title=title))
+    except KeyboardInterrupt:
+        pass
+
+
 def main() -> None:
     cli()
 
