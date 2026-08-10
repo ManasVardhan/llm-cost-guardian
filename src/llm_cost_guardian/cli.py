@@ -788,6 +788,97 @@ def dashboard(
         pass
 
 
+@cli.command()
+@click.argument("ledger_file", type=click.Path(exists=True))
+@click.option(
+    "--since", default=None, help="Only include records on or after this date (YYYY-MM-DD)."
+)
+@click.option(
+    "--until", default=None, help="Only include records on or before this date (YYYY-MM-DD)."
+)
+@click.option(
+    "--to-report",
+    "to_report",
+    type=click.Path(),
+    default=None,
+    help="Write a standard JSON report usable by every other command.",
+)
+@click.option("--json-output", "as_json", is_flag=True, help="Output as JSON.")
+def ledger(
+    ledger_file: str,
+    since: str | None,
+    until: str | None,
+    to_report: str | None,
+    as_json: bool,
+) -> None:
+    """Summarize a JSONL cost ledger written by CostTracker.attach_ledger.
+
+    Reads the append-only ledger, optionally filters by date range (local
+    time), and prints a summary. Use --to-report to convert the ledger into
+    a JSON report so top, stats, daily, forecast, alert, and dashboard all
+    work on persisted data.
+    """
+    from datetime import datetime, timedelta
+
+    from .exporters import save_json, to_json
+    from .ledger import CostLedger
+
+    def _parse_day(value: str, name: str, *, end_of_day: bool) -> float:
+        try:
+            day = datetime.fromisoformat(value)
+        except ValueError:
+            click.echo(f"Error: --{name} must be a date like 2026-08-09, got {value!r}.", err=True)
+            sys.exit(1)
+        if end_of_day and day.time() == datetime.min.time():
+            day = day + timedelta(days=1) - timedelta(microseconds=1)
+        return day.timestamp()
+
+    since_ts = _parse_day(since, "since", end_of_day=False) if since else None
+    until_ts = _parse_day(until, "until", end_of_day=True) if until else None
+
+    ledger_obj = CostLedger(ledger_file)
+    tracker = ledger_obj.to_tracker(since=since_ts, until=until_ts)
+
+    if ledger_obj.skipped_lines:
+        click.echo(
+            f"Warning: skipped {ledger_obj.skipped_lines} malformed line(s) in {ledger_file}.",
+            err=True,
+        )
+
+    if to_report:
+        save_json(tracker, to_report)
+        click.echo(f"Wrote report with {len(tracker.records)} record(s) to {to_report}")
+        return
+
+    if as_json:
+        click.echo(to_json(tracker))
+        return
+
+    records = tracker.records
+    if not records:
+        click.echo("No records found in ledger.")
+        return
+
+    summary = tracker.summary()
+    first = min(r.timestamp for r in records)
+    last = max(r.timestamp for r in records)
+    fmt = "%Y-%m-%d %H:%M:%S"
+    click.echo("=== Cost Ledger ===")
+    click.echo(f"Ledger file:    {ledger_file}")
+    click.echo(f"Records:        {len(records):,}")
+    click.echo(f"First record:   {datetime.fromtimestamp(first).strftime(fmt)}")
+    click.echo(f"Last record:    {datetime.fromtimestamp(last).strftime(fmt)}")
+    click.echo(f"Total cost:     ${summary['total_cost_usd']:.6f}")
+    click.echo(f"Input tokens:   {summary['total_input_tokens']:,}")
+    click.echo(f"Output tokens:  {summary['total_output_tokens']:,}")
+
+    by_model = summary.get("cost_by_model", {})
+    if isinstance(by_model, dict) and by_model:
+        click.echo("\nCost by model:")
+        for model, cost in sorted(by_model.items(), key=lambda x: -x[1]):
+            click.echo(f"  {model:<35} ${cost:.6f}")
+
+
 def main() -> None:
     cli()
 

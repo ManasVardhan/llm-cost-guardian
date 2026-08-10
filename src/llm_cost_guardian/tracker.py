@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+import os
 import threading
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 
 from .models import get_pricing
+
+if TYPE_CHECKING:
+    from .ledger import CostLedger
 
 UNTAGGED = "(untagged)"
 UNATTRIBUTED = "(unattributed)"
@@ -75,6 +80,7 @@ class CostTracker:
         self._total_input_tokens: int = 0
         self._total_output_tokens: int = 0
         self._on_record = on_record
+        self._ledger: CostLedger | None = None
 
     # -- Public API ----------------------------------------------------------
 
@@ -133,11 +139,71 @@ class CostTracker:
             self._total_input_tokens += input_tokens
             self._total_output_tokens += output_tokens
             cumulative = self._total_cost
+            ledger = self._ledger
+
+        if ledger is not None:
+            ledger.append(rec)
 
         if self._on_record:
             self._on_record(rec, cumulative)
 
         return rec
+
+    def add_record(self, record: UsageRecord) -> UsageRecord:
+        """Add an existing UsageRecord as-is, preserving its timestamp.
+
+        Used when replaying persisted records (for example from a ledger).
+        Unlike ``record``, this never recalculates cost, never writes to an
+        attached ledger, and does not invoke the ``on_record`` callback.
+        """
+        if record.input_tokens < 0 or record.output_tokens < 0:
+            raise ValueError(
+                f"Token counts must be non-negative, got "
+                f"input_tokens={record.input_tokens}, "
+                f"output_tokens={record.output_tokens}"
+            )
+        with self._lock:
+            self._records.append(record)
+            self._total_cost += record.cost
+            self._total_input_tokens += record.input_tokens
+            self._total_output_tokens += record.output_tokens
+        return record
+
+    def attach_ledger(
+        self,
+        path: str | os.PathLike[str],
+        *,
+        replay: bool = False,
+    ) -> CostLedger:
+        """Attach a persistent JSONL ledger at *path*.
+
+        Every subsequent ``record`` call is appended to the ledger file, so
+        cost data survives process restarts. Pass ``replay=True`` to first
+        load any records already in the ledger into this tracker (without
+        rewriting them and without firing the ``on_record`` callback).
+
+        Returns the attached CostLedger.
+        """
+        from .ledger import CostLedger
+
+        ledger = CostLedger(path)
+        if replay:
+            for record in ledger.records():
+                self.add_record(record)
+        with self._lock:
+            self._ledger = ledger
+        return ledger
+
+    def detach_ledger(self) -> None:
+        """Stop persisting records to the attached ledger, if any."""
+        with self._lock:
+            self._ledger = None
+
+    @property
+    def ledger(self) -> CostLedger | None:
+        """The attached CostLedger, or None."""
+        with self._lock:
+            return self._ledger
 
     @property
     def total_cost(self) -> float:

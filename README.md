@@ -25,6 +25,7 @@ LLM API costs can spiral out of control fast - a single runaway loop can burn th
 - 📅 **Daily cost breakdown** - per-day spend with `cost_by_day()` and a `daily` CLI bar chart
 - 🔔 **Slack / Discord alerts** - webhook notifications when spend crosses thresholds
 - 📟 **Terminal dashboard** - `dashboard` CLI with budget gauge, trends, and live `--watch` mode
+- 🧾 **Persistent cost ledger** - append-only JSONL file so costs survive process restarts
 - 📈 **Prometheus export** - expose metrics for your monitoring stack
 - 💾 **JSON & CSV export** - save usage reports for analysis
 - 🖥️ **CLI tool** - estimate costs and view reports from the terminal
@@ -318,6 +319,45 @@ dashboard just keeps the last good frame.
 The same data is available in Python via `build_dashboard_data(report_dict)`
 and can be rendered anywhere rich renders with `render_dashboard(dash)`.
 
+### Persistent Cost Ledger
+
+Trackers live in memory, so costs vanish when the process exits. Attach a
+ledger and every record is also appended to a JSONL file, one JSON object
+per line, using the same schema as the JSON exporter:
+
+```python
+from llm_cost_guardian import CostTracker
+
+tracker = CostTracker()
+tracker.attach_ledger("costs.jsonl", replay=True)  # replay loads prior records
+tracker.record("gpt-4o", 1000, 200)                # persisted automatically
+```
+
+`replay=True` loads existing ledger entries into the tracker on attach
+(without rewriting them or firing `on_record`), so restarts pick up right
+where they left off. Read a ledger from any process:
+
+```python
+from llm_cost_guardian import CostLedger
+
+ledger = CostLedger("costs.jsonl")
+tracker = ledger.to_tracker()                 # or records(since=..., until=...)
+print(tracker.total_cost, tracker.cost_by_model())
+```
+
+The `ledger` CLI command summarizes a ledger file and converts it into a
+standard JSON report, which makes every other command work on persisted data:
+
+```bash
+llm-cost-guardian ledger costs.jsonl                          # summary
+llm-cost-guardian ledger costs.jsonl --since 2026-08-01       # date range (local)
+llm-cost-guardian ledger costs.jsonl --to-report report.json  # convert
+llm-cost-guardian dashboard report.json --budget 50           # then anything
+```
+
+Malformed lines (partial writes, manual edits) are skipped with a warning,
+never a crash, and the valid records still load.
+
 ### CLI Usage
 
 ```bash
@@ -360,6 +400,10 @@ llm-cost-guardian alert usage_report.json -t 10 --slack-webhook https://hooks.sl
 
 # Terminal dashboard (requires the [dashboard] extra)
 llm-cost-guardian dashboard usage_report.json --budget 50 --watch 5
+
+# Summarize a JSONL cost ledger, or convert it to a report
+llm-cost-guardian ledger costs.jsonl --since 2026-08-01
+llm-cost-guardian ledger costs.jsonl --to-report report.json
 ```
 
 Example `tags` output:

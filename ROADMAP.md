@@ -20,12 +20,15 @@ Send real-time cost alerts to Slack or Discord when spend exceeds configurable t
 ### 📟 Dashboard TUI
 Terminal dashboard showing cost breakdowns, trend graphs, and budget utilization at a glance. Shipped as the `dashboard` CLI command (optional `[dashboard]` extra, built on `rich`): totals, a color-coded budget gauge (yellow at 80%, red when over), cost by model with share percentages, a daily trend bar chart, top tags and users, and the most expensive calls. `--watch N` keeps it live by re-reading the report file, `--json-output` emits the computed data without rich, and `build_dashboard_data()` / `render_dashboard()` expose the same pipeline in Python.
 
+### 🧾 Persistent Cost Ledger
+Append-only on-disk ledger so trackers persist across processes. Shipped as JSONL: `CostTracker.attach_ledger(path, replay=True)` appends every record durably and can replay prior entries on attach, `CostLedger` reads ledgers from any process (`records()` with since/until filters, `to_tracker()`, `skipped_lines` for corrupt-line visibility), and a `ledger` CLI command that summarizes a ledger, filters by `--since`/`--until` dates, and converts to a standard JSON report with `--to-report` so top, stats, daily, forecast, alert, and dashboard all work on persisted data.
+
 ---
 
 ## v0.2 (Planned)
 
-### 🧾 Persistent Cost Ledger
-Append-only on-disk ledger (SQLite or JSONL) so trackers can persist across processes: `CostTracker.attach_ledger(path)` to record durably, plus CLI support for querying date ranges without manually saving and merging JSON reports.
+### 📥 Ledger Import and Merge
+Merge multiple ledgers or JSON reports into one (`llm-cost-guardian merge a.jsonl b.jsonl -o combined.json`) with deduplication, so teams can combine per-service cost files into a single view.
 
 ---
 
