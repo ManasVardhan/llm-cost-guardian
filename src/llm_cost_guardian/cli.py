@@ -879,6 +879,93 @@ def ledger(
             click.echo(f"  {model:<35} ${cost:.6f}")
 
 
+@cli.command()
+@click.argument("sources", nargs=-1, required=True, type=click.Path(exists=True))
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(),
+    default=None,
+    help="Write the merged JSON report to this file instead of stdout.",
+)
+@click.option(
+    "--no-dedupe",
+    is_flag=True,
+    help="Keep records that appear in more than one source instead of collapsing them.",
+)
+@click.option(
+    "--json-output",
+    "as_json",
+    is_flag=True,
+    help="With --output, print the merge summary as JSON.",
+)
+def merge(
+    sources: tuple[str, ...],
+    output: str | None,
+    no_dedupe: bool,
+    as_json: bool,
+) -> None:
+    """Merge JSONL ledgers and JSON reports into one combined report.
+
+    Accepts any mix of ledger files (written by CostTracker.attach_ledger)
+    and JSON reports (written by save_json); each source's format is
+    auto-detected. Records identical in every field are deduplicated by
+    default so overlapping exports do not double count spend. The merged
+    output is a standard JSON report usable by report, top, stats, daily,
+    forecast, alert, and dashboard.
+    """
+    from .exporters import save_json, to_json
+    from .merge import MergeError, merge_sources
+
+    try:
+        result = merge_sources(sources, dedupe=not no_dedupe)
+    except MergeError as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+    for src in result.sources:
+        if src.skipped:
+            click.echo(
+                f"Warning: skipped {src.skipped} malformed entr"
+                f"{'y' if src.skipped == 1 else 'ies'} in {src.path}.",
+                err=True,
+            )
+
+    if output is None:
+        click.echo(to_json(result.tracker))
+        return
+
+    save_json(result.tracker, output)
+
+    if as_json:
+        payload = {
+            "sources": [
+                {
+                    "path": s.path,
+                    "format": s.format,
+                    "records": s.records,
+                    "skipped": s.skipped,
+                }
+                for s in result.sources
+            ],
+            "duplicates_removed": result.duplicates_removed,
+            "merged_records": result.total_records,
+            "total_cost_usd": round(result.tracker.total_cost, 6),
+            "output": output,
+        }
+        click.echo(json.dumps(payload, indent=2))
+        return
+
+    click.echo("=== Merged Cost Report ===")
+    click.echo("Sources:")
+    for src in result.sources:
+        click.echo(f"  {src.path:<40} {src.format:<7} {src.records:>7,} record(s)")
+    click.echo(f"Duplicates removed: {result.duplicates_removed:,}")
+    click.echo(f"Merged records:     {result.total_records:,}")
+    click.echo(f"Total cost:         ${result.tracker.total_cost:.6f}")
+    click.echo(f"\nWrote merged report to {output}")
+
+
 def main() -> None:
     cli()
 

@@ -26,6 +26,7 @@ LLM API costs can spiral out of control fast - a single runaway loop can burn th
 - 🔔 **Slack / Discord alerts** - webhook notifications when spend crosses thresholds
 - 📟 **Terminal dashboard** - `dashboard` CLI with budget gauge, trends, and live `--watch` mode
 - 🧾 **Persistent cost ledger** - append-only JSONL file so costs survive process restarts
+- 📥 **Merge and dedupe** - combine per-service ledgers and reports into one view with `merge`
 - 📈 **Prometheus export** - expose metrics for your monitoring stack
 - 💾 **JSON & CSV export** - save usage reports for analysis
 - 🖥️ **CLI tool** - estimate costs and view reports from the terminal
@@ -358,6 +359,35 @@ llm-cost-guardian dashboard report.json --budget 50           # then anything
 Malformed lines (partial writes, manual edits) are skipped with a warning,
 never a crash, and the valid records still load.
 
+### Merging Ledgers and Reports
+
+Teams usually end up with one cost file per service, host, or CI run. The
+`merge` command combines any mix of JSONL ledgers and JSON reports into a
+single deduplicated report:
+
+```bash
+llm-cost-guardian merge api.jsonl worker.jsonl batch-report.json -o combined.json
+llm-cost-guardian daily combined.json      # then use any command on it
+```
+
+Each source's format is auto-detected. Records identical in every field
+(model, tokens, cost, timestamp, tags, user, metadata) are collapsed to one
+so overlapping exports do not double count spend; pass `--no-dedupe` to keep
+them. Without `-o` the merged report is printed to stdout, and with
+`--json-output` the summary is machine-readable for CI.
+
+The same pipeline is available in Python:
+
+```python
+from llm_cost_guardian import merge_sources
+
+result = merge_sources(["api.jsonl", "worker.jsonl", "batch-report.json"])
+print(result.tracker.total_cost)      # merged CostTracker
+print(result.duplicates_removed)      # overlap between sources
+for src in result.sources:            # per-source stats
+    print(src.path, src.format, src.records, src.skipped)
+```
+
 ### CLI Usage
 
 ```bash
@@ -404,6 +434,9 @@ llm-cost-guardian dashboard usage_report.json --budget 50 --watch 5
 # Summarize a JSONL cost ledger, or convert it to a report
 llm-cost-guardian ledger costs.jsonl --since 2026-08-01
 llm-cost-guardian ledger costs.jsonl --to-report report.json
+
+# Merge ledgers and reports into one deduplicated report
+llm-cost-guardian merge api.jsonl worker.jsonl -o combined.json
 ```
 
 Example `tags` output:

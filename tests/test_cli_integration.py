@@ -6,7 +6,7 @@ import subprocess
 import sys
 import tempfile
 
-from llm_cost_guardian import CostTracker
+from llm_cost_guardian import CostTracker, __version__
 from llm_cost_guardian.exporters import save_json
 
 PYTHON = os.path.join(os.path.dirname(sys.executable), "python3.12")
@@ -28,7 +28,7 @@ class TestCLIVersion:
     def test_version_flag(self):
         result = _run_cli("--version")
         assert result.returncode == 0
-        assert "0.1.1" in result.stdout
+        assert __version__ in result.stdout
 
     def test_help_flag(self):
         result = _run_cli("--help")

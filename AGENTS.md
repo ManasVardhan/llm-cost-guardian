@@ -192,11 +192,11 @@ pytest tests/test_tracker.py -v
 
 ## Current Status
 
-- **Version**: 0.1.1
+- **Version**: 0.2.0
 - **Published on PyPI**: yes (`pip install llm-cost-guardian`)
-- **What works**: Full cost tracking, budget enforcement, OpenAI/Anthropic wrappers, JSON/CSV/Prometheus export, CLI (models, estimate, report, compare, top), custom model registration, thread safety
+- **What works**: Full cost tracking, budget enforcement, OpenAI/Anthropic wrappers, JSON/CSV/Prometheus/markdown export, CLI (models, estimate, report, compare, top, stats, tags, users, daily, forecast, alert, dashboard, ledger, merge), Slack/Discord alerts, persistent JSONL ledger, ledger/report merge with dedupe, custom model registration, thread safety
 - **Known limitations**: No async wrapper support yet. YAML config file loading not implemented in code (documented in README). No Google wrapper yet.
-- **Roadmap (v0.2)**: Slack/Discord webhook alerts, per-user cost attribution, dashboard TUI, project/tag-based grouping
+- **Roadmap (v0.3)**: Cost anomaly detection
 
 ## Development Guide
 

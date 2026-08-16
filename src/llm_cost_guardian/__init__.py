@@ -27,12 +27,13 @@ from .exporters import (
     to_markdown,
     to_prometheus,
 )
-from .ledger import CostLedger
+from .ledger import CostLedger, record_from_dict
+from .merge import MergeError, MergeResult, SourceStats, load_records, merge_sources
 from .models import ModelPricing, Provider, get_pricing, list_models, register_model
 from .tracker import UNATTRIBUTED, UNTAGGED, CostTracker, UsageRecord
 from .wrappers import TrackedAnthropic, TrackedOpenAI
 
-__version__ = "0.1.1"
+__version__ = "0.2.0"
 
 __all__ = [
     "Action",
@@ -46,11 +47,14 @@ __all__ = [
     "CostTracker",
     "DiscordWebhook",
     "HardCapPolicy",
+    "MergeError",
+    "MergeResult",
     "ModelPricing",
     "Provider",
     "SlackWebhook",
     "SlidingWindowPolicy",
     "SoftWarningPolicy",
+    "SourceStats",
     "TrackedAnthropic",
     "TrackedOpenAI",
     "UNATTRIBUTED",
@@ -60,6 +64,9 @@ __all__ = [
     "build_dashboard_data",
     "get_pricing",
     "list_models",
+    "load_records",
+    "merge_sources",
+    "record_from_dict",
     "register_model",
     "render_dashboard",
     "save_csv",

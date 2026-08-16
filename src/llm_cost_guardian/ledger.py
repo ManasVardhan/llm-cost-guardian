@@ -52,6 +52,16 @@ def _line_to_record(line: str) -> UsageRecord | None:
         data = json.loads(line)
     except json.JSONDecodeError:
         return None
+    return record_from_dict(data)
+
+
+def record_from_dict(data: object) -> UsageRecord | None:
+    """Build a UsageRecord from a plain dict in the record schema, or None if malformed.
+
+    Accepts the schema shared by ledger lines and JSON report entries:
+    ``model``, ``input_tokens``, ``output_tokens``, ``cost_usd`` are required;
+    ``timestamp``, ``metadata``, ``tags``, and ``user`` are optional.
+    """
     if not isinstance(data, dict):
         return None
     for field in _REQUIRED_FIELDS:

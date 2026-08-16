@@ -6,6 +6,7 @@ import tempfile
 
 from click.testing import CliRunner
 
+from llm_cost_guardian import __version__
 from llm_cost_guardian.cli import cli
 
 
@@ -194,7 +195,7 @@ class TestVersionFlag:
         runner = CliRunner()
         result = runner.invoke(cli, ["--version"])
         assert result.exit_code == 0
-        assert "0.1.1" in result.output
+        assert __version__ in result.output
 
 
 class TestHelp:

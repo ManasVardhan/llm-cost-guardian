@@ -23,12 +23,15 @@ Terminal dashboard showing cost breakdowns, trend graphs, and budget utilization
 ### 🧾 Persistent Cost Ledger
 Append-only on-disk ledger so trackers persist across processes. Shipped as JSONL: `CostTracker.attach_ledger(path, replay=True)` appends every record durably and can replay prior entries on attach, `CostLedger` reads ledgers from any process (`records()` with since/until filters, `to_tracker()`, `skipped_lines` for corrupt-line visibility), and a `ledger` CLI command that summarizes a ledger, filters by `--since`/`--until` dates, and converts to a standard JSON report with `--to-report` so top, stats, daily, forecast, alert, and dashboard all work on persisted data.
 
+### 📥 Ledger Import and Merge
+Merge multiple ledgers or JSON reports into one so teams can combine per-service cost files into a single view. Shipped in v0.2.0 as the `merge` CLI command (`llm-cost-guardian merge a.jsonl b.json -o combined.json`) and `merge_sources()` / `load_records()` in Python: formats are auto-detected per source, records identical in every field are deduplicated by default (`--no-dedupe` to keep them), merged output is a standard JSON report usable by every other command, and per-source stats plus skipped-entry warnings make partial data visible.
+
 ---
 
-## v0.2 (Planned)
+## v0.3 (Planned)
 
-### 📥 Ledger Import and Merge
-Merge multiple ledgers or JSON reports into one (`llm-cost-guardian merge a.jsonl b.jsonl -o combined.json`) with deduplication, so teams can combine per-service cost files into a single view.
+### 📈 Cost Anomaly Detection
+Flag days, models, or users whose spend spikes versus their trailing average (`llm-cost-guardian anomalies report.json`), so unexpected cost jumps surface before the invoice does.
 
 ---
 

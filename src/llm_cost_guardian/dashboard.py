@@ -283,12 +283,12 @@ def render_dashboard(dash: dict[str, Any], *, title: str = "LLM Cost Guardian") 
         day_table.add_column("Trend", ratio=1)
         bar_width = 20
         for row in dash["by_day"]:
-            bar = "#" * round(row["cost_usd"] / max_cost * bar_width) if max_cost > 0 else ""
+            trend_bar = "#" * round(row["cost_usd"] / max_cost * bar_width) if max_cost > 0 else ""
             day_table.add_row(
                 row["day"],
                 f"{row['calls']:,}",
                 f"${row['cost_usd']:.6f}",
-                Text(bar, style="green"),
+                Text(trend_bar, style="green"),
             )
         renderables.append(Panel(day_table, title="Daily Trend", border_style="green"))
 
