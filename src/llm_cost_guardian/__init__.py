@@ -8,6 +8,7 @@ from .alerts import (
     SlackWebhook,
     Webhook,
 )
+from .anomalies import Anomaly, AnomalyReport, analyze_anomalies
 from .budget import (
     Action,
     BudgetError,
@@ -33,12 +34,14 @@ from .models import ModelPricing, Provider, get_pricing, list_models, register_m
 from .tracker import UNATTRIBUTED, UNTAGGED, CostTracker, UsageRecord
 from .wrappers import TrackedAnthropic, TrackedOpenAI
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
     "Action",
     "AlertEvent",
     "AlertRule",
+    "Anomaly",
+    "AnomalyReport",
     "BudgetError",
     "BudgetManager",
     "BudgetResult",
@@ -61,6 +64,7 @@ __all__ = [
     "UNTAGGED",
     "UsageRecord",
     "Webhook",
+    "analyze_anomalies",
     "build_dashboard_data",
     "get_pricing",
     "list_models",

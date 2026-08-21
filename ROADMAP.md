@@ -26,12 +26,15 @@ Append-only on-disk ledger so trackers persist across processes. Shipped as JSON
 ### 📥 Ledger Import and Merge
 Merge multiple ledgers or JSON reports into one so teams can combine per-service cost files into a single view. Shipped in v0.2.0 as the `merge` CLI command (`llm-cost-guardian merge a.jsonl b.json -o combined.json`) and `merge_sources()` / `load_records()` in Python: formats are auto-detected per source, records identical in every field are deduplicated by default (`--no-dedupe` to keep them), merged output is a standard JSON report usable by every other command, and per-source stats plus skipped-entry warnings make partial data visible.
 
+### 📈 Cost Anomaly Detection
+Flag days, models, or users whose spend spikes versus their trailing average, so unexpected cost jumps surface before the invoice does. Shipped in v0.3.0 as the `anomalies` CLI command and `analyze_anomalies()` in Python: report records are bucketed into calendar days (local or `--utc`), quiet days are zero-filled into the baseline, and each day's spend is compared to the mean of the trailing `--window` days (default 7) across total, per-model, and per-user dimensions. Days at or above `--threshold` times the baseline (default 2.0) and `--min-spend` USD are flagged, spend on a zero baseline is reported as new, `--min-history` suppresses false alarms on short reports, and exit codes (0 clean, 2 anomalies, 1 bad input) make it CI and cron friendly with `--json-output`.
+
 ---
 
-## v0.3 (Planned)
+## v0.4 (Planned)
 
-### 📈 Cost Anomaly Detection
-Flag days, models, or users whose spend spikes versus their trailing average (`llm-cost-guardian anomalies report.json`), so unexpected cost jumps surface before the invoice does.
+### 🧮 Token Efficiency Report
+Per-model and per-tag output/input token ratios and cost per 1K output tokens (`llm-cost-guardian efficiency report.json`), so teams can spot prompts and models that burn tokens without producing output.
 
 ---
 

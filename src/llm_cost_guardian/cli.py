@@ -966,6 +966,106 @@ def merge(
     click.echo(f"\nWrote merged report to {output}")
 
 
+@cli.command()
+@click.argument("report_file", type=click.Path(exists=True))
+@click.option(
+    "--window", "-w", type=int, default=7, help="Trailing days for the baseline (default 7)."
+)
+@click.option(
+    "--threshold",
+    "-t",
+    type=float,
+    default=2.0,
+    help="Flag days at or above this multiple of the baseline (default 2.0).",
+)
+@click.option(
+    "--min-spend",
+    type=float,
+    default=0.01,
+    help="Ignore days below this many USD (default 0.01).",
+)
+@click.option(
+    "--min-history",
+    type=int,
+    default=3,
+    help="Days of history required before flagging (default 3).",
+)
+@click.option("--utc", is_flag=True, help="Bucket days by UTC instead of local time.")
+@click.option("--json-output", "as_json", is_flag=True, help="Output as JSON.")
+def anomalies(
+    report_file: str,
+    window: int,
+    threshold: float,
+    min_spend: float,
+    min_history: int,
+    utc: bool,
+    as_json: bool,
+) -> None:
+    """Flag days, models, or users whose spend spikes versus their trailing average.
+
+    Buckets the report into calendar days and compares each day's spend to
+    the mean of the active days inside the trailing --window across three
+    dimensions: total spend, per model, and per user. Spend whose entire
+    baseline window was quiet is reported as new spend.
+
+    Exit codes: 0 when no anomalies are found, 2 when at least one is,
+    1 on invalid input. Designed for CI and cron: run it against a saved
+    report and fail the job when spend spikes.
+    """
+    from .anomalies import analyze_anomalies
+
+    data = _load_report(report_file)
+
+    try:
+        result = analyze_anomalies(
+            data,
+            window=window,
+            threshold=threshold,
+            min_spend=min_spend,
+            min_history=min_history,
+            utc=utc,
+        )
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+    if as_json:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+        sys.exit(2 if result.has_anomalies else 0)
+
+    click.echo(f"=== Cost Anomalies ({result.timezone}) ===")
+    click.echo(
+        f"Analyzed {result.records_analyzed:,} record(s) across "
+        f"{result.days_analyzed} day(s); window={result.window}d, "
+        f"threshold={result.threshold:g}x, min spend ${result.min_spend:g}"
+    )
+    if result.records_skipped:
+        click.echo(
+            f"Warning: skipped {result.records_skipped} record(s) without usable data.",
+            err=True,
+        )
+
+    if not result.has_anomalies:
+        click.echo("\nOK: no anomalies found.")
+        return
+
+    click.echo()
+    click.echo(
+        f"{'Day':<12} {'Dimension':<10} {'Key':<32} {'Spend':>12} {'Baseline':>12} {'Ratio':>8}"
+    )
+    click.echo("-" * 90)
+    for a in result.anomalies:
+        ratio = f"{a.ratio:.1f}x" if a.ratio is not None else "new"
+        click.echo(
+            f"{a.day:<12} {a.dimension:<10} {a.key:<32} "
+            f"${a.spend_usd:>11.6f} ${a.baseline_usd:>11.6f} {ratio:>8}"
+        )
+    click.echo("-" * 90)
+    plural = "y" if len(result.anomalies) == 1 else "ies"
+    click.echo(f"\nALERT: {len(result.anomalies)} anomal{plural} found.")
+    sys.exit(2)
+
+
 def main() -> None:
     cli()
 

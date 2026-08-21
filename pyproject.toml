@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "llm-cost-guardian"
-version = "0.2.0"
+version = "0.3.0"
 description = "Real-time cost monitoring and budget enforcement for LLM API calls"
 readme = "README.md"
 license = "MIT"

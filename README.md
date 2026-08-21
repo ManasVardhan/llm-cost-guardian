@@ -27,6 +27,7 @@ LLM API costs can spiral out of control fast - a single runaway loop can burn th
 - 📟 **Terminal dashboard** - `dashboard` CLI with budget gauge, trends, and live `--watch` mode
 - 🧾 **Persistent cost ledger** - append-only JSONL file so costs survive process restarts
 - 📥 **Merge and dedupe** - combine per-service ledgers and reports into one view with `merge`
+- 📈 **Cost anomaly detection** - `anomalies` flags days, models, or users whose spend spikes
 - 📈 **Prometheus export** - expose metrics for your monitoring stack
 - 💾 **JSON & CSV export** - save usage reports for analysis
 - 🖥️ **CLI tool** - estimate costs and view reports from the terminal
@@ -388,6 +389,47 @@ for src in result.sources:            # per-source stats
     print(src.path, src.format, src.records, src.skipped)
 ```
 
+### Cost Anomaly Detection
+
+Catch spend spikes before the invoice does. The `anomalies` command buckets a
+report into calendar days and compares each day's spend to the trailing
+average of recent active days across three dimensions: total spend, per
+model, and per user:
+
+```bash
+llm-cost-guardian anomalies usage_report.json
+llm-cost-guardian anomalies usage_report.json --window 7 -t 2.0 --min-spend 0.01
+llm-cost-guardian anomalies usage_report.json --utc --json-output
+```
+
+A day is flagged when its spend is at least `--threshold` times the mean of
+the active days (spend above zero) inside the trailing `--window`, and at
+least `--min-spend` USD. Quiet days are skipped in the baseline so bursty
+every-other-day usage does not false alarm, and spend whose entire baseline
+window was quiet is reported as `new` (for example, a model nobody used
+before suddenly costing money). `--min-history` days of history are required
+before anything is flagged, so short reports do not false alarm.
+
+Exit codes make it CI and cron friendly: 0 when clean, 2 when at least one
+anomaly is found, 1 on invalid input.
+
+```
+=== Cost Anomalies (local) ===
+Analyzed 412 record(s) across 14 day(s); window=7d, threshold=2x, min spend $0.01
+
+Day          Dimension  Key                                     Spend     Baseline    Ratio
+------------------------------------------------------------------------------------------
+2026-08-14   total      (total)                          $   9.804300 $   2.113471     4.6x
+2026-08-14   model      gpt-4o                           $   8.113200 $   1.204119     6.7x
+2026-08-14   user       batch-runner                     $   7.921000 $   0.884314     9.0x
+
+ALERT: 3 anomalies found.
+```
+
+The same detection is available in Python via `analyze_anomalies(report_dict)`,
+returning an `AnomalyReport` with typed `Anomaly` entries and `to_dict()` for
+serialization.
+
 ### CLI Usage
 
 ```bash
@@ -437,6 +479,9 @@ llm-cost-guardian ledger costs.jsonl --to-report report.json
 
 # Merge ledgers and reports into one deduplicated report
 llm-cost-guardian merge api.jsonl worker.jsonl -o combined.json
+
+# Flag spend spikes versus the trailing average (exit 2 when found)
+llm-cost-guardian anomalies usage_report.json --window 7 -t 2.0
 ```
 
 Example `tags` output:
