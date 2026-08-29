@@ -29,12 +29,15 @@ Merge multiple ledgers or JSON reports into one so teams can combine per-service
 ### 📈 Cost Anomaly Detection
 Flag days, models, or users whose spend spikes versus their trailing average, so unexpected cost jumps surface before the invoice does. Shipped in v0.3.0 as the `anomalies` CLI command and `analyze_anomalies()` in Python: report records are bucketed into calendar days (local or `--utc`), quiet days are zero-filled into the baseline, and each day's spend is compared to the mean of the trailing `--window` days (default 7) across total, per-model, and per-user dimensions. Days at or above `--threshold` times the baseline (default 2.0) and `--min-spend` USD are flagged, spend on a zero baseline is reported as new, `--min-history` suppresses false alarms on short reports, and exit codes (0 clean, 2 anomalies, 1 bad input) make it CI and cron friendly with `--json-output`.
 
+### 🧮 Token Efficiency Report
+Spot prompts and models that burn input tokens without producing output. Shipped in v0.4.0 as the `efficiency` CLI command and `analyze_efficiency()` in Python: for the whole report and for each model and tag it sums calls, input and output tokens, and cost, then derives the output-to-input token ratio and the cost per 1K output tokens (plus cost per 1K input tokens in the API). A ratio below 1.00 flags buckets that consume more input than they produce, and rows are sorted by descending cost so the biggest spend surfaces first. Records missing a model or with non-numeric or negative token or cost fields are skipped and counted, and `--json-output` makes it scriptable. Python API: `analyze_efficiency`, `EfficiencyReport`, `EfficiencyStat`.
+
 ---
 
-## v0.4 (Planned)
+## v0.5 (Planned)
 
-### 🧮 Token Efficiency Report
-Per-model and per-tag output/input token ratios and cost per 1K output tokens (`llm-cost-guardian efficiency report.json`), so teams can spot prompts and models that burn tokens without producing output.
+### 🪟 Context Window Utilization
+Per-model average and p95 input-token usage against each model's context window, so teams can see which calls run close to the limit and which models are over-provisioned for the prompts they actually receive.
 
 ---
 

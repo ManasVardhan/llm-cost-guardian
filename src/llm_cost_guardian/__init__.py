@@ -19,6 +19,7 @@ from .budget import (
     SoftWarningPolicy,
 )
 from .dashboard import build_dashboard_data, render_dashboard
+from .efficiency import EfficiencyReport, EfficiencyStat, analyze_efficiency
 from .exporters import (
     save_csv,
     save_json,
@@ -34,7 +35,7 @@ from .models import ModelPricing, Provider, get_pricing, list_models, register_m
 from .tracker import UNATTRIBUTED, UNTAGGED, CostTracker, UsageRecord
 from .wrappers import TrackedAnthropic, TrackedOpenAI
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 __all__ = [
     "Action",
@@ -49,6 +50,8 @@ __all__ = [
     "CostLedger",
     "CostTracker",
     "DiscordWebhook",
+    "EfficiencyReport",
+    "EfficiencyStat",
     "HardCapPolicy",
     "MergeError",
     "MergeResult",
@@ -65,6 +68,7 @@ __all__ = [
     "UsageRecord",
     "Webhook",
     "analyze_anomalies",
+    "analyze_efficiency",
     "build_dashboard_data",
     "get_pricing",
     "list_models",

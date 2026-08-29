@@ -1066,6 +1066,78 @@ def anomalies(
     sys.exit(2)
 
 
+def _fmt_ratio(value: float | None) -> str:
+    return f"{value:.2f}" if value is not None else "-"
+
+
+def _fmt_cost_per_1k(value: float | None) -> str:
+    return f"${value:.4f}" if value is not None else "-"
+
+
+def _echo_efficiency_rows(stats: list) -> None:
+    for s in stats:
+        click.echo(
+            f"{s.key:<32.32} {s.calls:>7,} {s.input_tokens:>14,} "
+            f"{s.output_tokens:>14,} {_fmt_ratio(s.output_input_ratio):>8} "
+            f"{_fmt_cost_per_1k(s.cost_per_1k_output):>14}"
+        )
+
+
+@cli.command()
+@click.argument("report_file", type=click.Path(exists=True))
+@click.option("--json-output", "as_json", is_flag=True, help="Output as JSON.")
+def efficiency(report_file: str, as_json: bool) -> None:
+    """Report per-model and per-tag token efficiency for a saved report.
+
+    For the whole report and for each model and tag, shows total calls,
+    input and output tokens, the output-to-input token ratio, and the cost
+    per 1K output tokens. A ratio below 1.00 means a bucket consumes more
+    input than it produces; a high cost per 1K output tokens means output
+    is expensive to generate. Use it to spot models and prompts that burn
+    tokens without producing much output.
+
+    Exit codes: 0 on success, 1 on invalid input.
+    """
+    from .efficiency import analyze_efficiency
+
+    data = _load_report(report_file)
+    result = analyze_efficiency(data)
+
+    if as_json:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+        return
+
+    click.echo("=== Token Efficiency ===")
+    click.echo(
+        f"Analyzed {result.records_analyzed:,} record(s); "
+        f"ratio is output/input tokens, cost per 1K output tokens."
+    )
+    if result.records_skipped:
+        click.echo(
+            f"Warning: skipped {result.records_skipped} record(s) without usable data.",
+            err=True,
+        )
+
+    if result.records_analyzed == 0:
+        click.echo("\nNo usable records found.")
+        return
+
+    header = (
+        f"{'Key':<32} {'Calls':>7} {'Input':>14} "
+        f"{'Output':>14} {'Ratio':>8} {'$/1K out':>14}"
+    )
+    click.echo()
+    click.echo(header)
+    click.echo("-" * 92)
+    _echo_efficiency_rows([result.overall])
+    if result.by_model:
+        click.echo("\nBy model:")
+        _echo_efficiency_rows(result.by_model)
+    if result.by_tag:
+        click.echo("\nBy tag:")
+        _echo_efficiency_rows(result.by_tag)
+
+
 def main() -> None:
     cli()
 

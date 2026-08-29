@@ -28,6 +28,7 @@ LLM API costs can spiral out of control fast - a single runaway loop can burn th
 - 🧾 **Persistent cost ledger** - append-only JSONL file so costs survive process restarts
 - 📥 **Merge and dedupe** - combine per-service ledgers and reports into one view with `merge`
 - 📈 **Cost anomaly detection** - `anomalies` flags days, models, or users whose spend spikes
+- 🧮 **Token efficiency report** - `efficiency` shows output/input ratios and cost per 1K output tokens by model and tag
 - 📈 **Prometheus export** - expose metrics for your monitoring stack
 - 💾 **JSON & CSV export** - save usage reports for analysis
 - 🖥️ **CLI tool** - estimate costs and view reports from the terminal
@@ -429,6 +430,45 @@ ALERT: 3 anomalies found.
 The same detection is available in Python via `analyze_anomalies(report_dict)`,
 returning an `AnomalyReport` with typed `Anomaly` entries and `to_dict()` for
 serialization.
+
+### Token Efficiency Report
+
+Spot prompts and models that burn input tokens without producing much output.
+The `efficiency` command sums calls, input and output tokens, and cost for the
+whole report and for each model and tag, then derives the output-to-input
+token ratio and the cost per 1K output tokens:
+
+```bash
+llm-cost-guardian efficiency usage_report.json
+llm-cost-guardian efficiency usage_report.json --json-output
+```
+
+A ratio below `1.00` means a bucket consumes more input than it produces (long
+prompts, short answers), and a high cost per 1K output tokens means output is
+expensive to generate. Rows are sorted by descending cost so the biggest spend
+surfaces first, and records missing a model or with bad token or cost fields
+are skipped and counted.
+
+```
+=== Token Efficiency ===
+Analyzed 412 record(s); ratio is output/input tokens, cost per 1K output tokens.
+
+Key                                Calls          Input         Output    Ratio       $/1K out
+--------------------------------------------------------------------------------------------
+(overall)                            412        820,000        240,000     0.29       $12.5000
+
+By model:
+gpt-4o                               260        610,000        150,000     0.25       $16.2000
+gpt-4o-mini                          152        210,000         90,000     0.43        $2.1000
+
+By tag:
+summarization                        180        540,000         60,000     0.11       $28.0000
+chat                                 232        280,000        180,000     0.64        $3.9000
+```
+
+The same analysis is available in Python via `analyze_efficiency(report_dict)`,
+returning an `EfficiencyReport` with typed `EfficiencyStat` rows (which also
+expose `cost_per_1k_input`) and `to_dict()` for serialization.
 
 ### CLI Usage
 
