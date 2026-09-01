@@ -1138,6 +1138,133 @@ def efficiency(report_file: str, as_json: bool) -> None:
         _echo_efficiency_rows(result.by_tag)
 
 
+def _parse_window_overrides(overrides: tuple[str, ...]) -> dict[str, int]:
+    windows: dict[str, int] = {}
+    for spec in overrides:
+        name, sep, raw = spec.partition("=")
+        name = name.strip()
+        try:
+            size = int(raw.strip())
+        except ValueError:
+            size = 0
+        if not sep or not name or size <= 0:
+            click.echo(
+                f"Error: invalid --window {spec!r}, expected MODEL=TOKENS "
+                f"with a positive token count (e.g. my-model=32000).",
+                err=True,
+            )
+            sys.exit(1)
+        windows[name] = size
+    return windows
+
+
+@cli.command("context")
+@click.argument("report_file", type=click.Path(exists=True))
+@click.option(
+    "--near-limit",
+    type=float,
+    default=0.8,
+    show_default=True,
+    help="Fraction of the window at which a model counts as near the limit.",
+)
+@click.option(
+    "--window",
+    "windows",
+    multiple=True,
+    metavar="MODEL=TOKENS",
+    help="Override or add a context window size (repeatable).",
+)
+@click.option(
+    "--fail-near-limit",
+    is_flag=True,
+    help="Exit 2 when any model's p95 utilization crosses --near-limit.",
+)
+@click.option("--json-output", "as_json", is_flag=True, help="Output as JSON.")
+def context(
+    report_file: str,
+    near_limit: float,
+    windows: tuple[str, ...],
+    fail_near_limit: bool,
+    as_json: bool,
+) -> None:
+    """Report per-model context window utilization for a saved report.
+
+    For each model, shows average, p95, and max input tokens against the
+    model's context window, plus how many calls run at or above the
+    near-limit fraction. Use it to spot calls at truncation risk and
+    models that are over-provisioned for the prompts they receive.
+    Window sizes come from the built-in model registry; use --window
+    MODEL=TOKENS to override or cover custom models.
+
+    Exit codes: 0 on success, 1 on invalid input, 2 when
+    --fail-near-limit is set and a model is near its limit.
+    """
+    from .context_window import analyze_context
+
+    data = _load_report(report_file)
+    try:
+        result = analyze_context(
+            data, windows=_parse_window_overrides(windows), near_limit=near_limit
+        )
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+    near = result.models_near_limit
+
+    if as_json:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+    else:
+        click.echo("=== Context Window Utilization ===")
+        click.echo(
+            f"Analyzed {result.records_analyzed:,} record(s); "
+            f"near-limit threshold {near_limit * 100:.0f}% of the window."
+        )
+        if result.records_skipped:
+            click.echo(
+                f"Warning: skipped {result.records_skipped} record(s) without usable data.",
+                err=True,
+            )
+
+        if result.records_analyzed == 0:
+            click.echo("\nNo usable records found.")
+            return
+
+        header = (
+            f"{'Model':<32} {'Calls':>7} {'Avg in':>10} {'P95 in':>10} "
+            f"{'Max in':>10} {'Window':>11} {'P95 util':>9} {'Near':>5}"
+        )
+        click.echo()
+        click.echo(header)
+        click.echo("-" * 100)
+        for s in result.by_model:
+            window = f"{s.context_window:,}" if s.context_window is not None else "?"
+            util = s.p95_utilization
+            util_str = f"{util * 100:.1f}%" if util is not None else "-"
+            near_str = str(s.calls_near_limit) if s.calls_near_limit is not None else "-"
+            click.echo(
+                f"{s.model:<32.32} {s.calls:>7,} {s.avg_input_tokens:>10,.0f} "
+                f"{s.p95_input_tokens:>10,.0f} {s.max_input_tokens:>10,} "
+                f"{window:>11} {util_str:>9} {near_str:>5}"
+            )
+
+        unknown = result.models_without_window
+        if unknown:
+            names = ", ".join(s.model for s in unknown)
+            click.echo(
+                f"\nNo known context window for: {names}. "
+                f"Use --window MODEL=TOKENS to supply one."
+            )
+        if near:
+            names = ", ".join(s.model for s in near)
+            click.echo(
+                f"\nNear limit ({near_limit * 100:.0f}% p95 utilization): {names}"
+            )
+
+    if fail_near_limit and near:
+        sys.exit(2)
+
+
 def main() -> None:
     cli()
 

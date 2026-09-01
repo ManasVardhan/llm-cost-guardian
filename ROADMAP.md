@@ -32,12 +32,15 @@ Flag days, models, or users whose spend spikes versus their trailing average, so
 ### 🧮 Token Efficiency Report
 Spot prompts and models that burn input tokens without producing output. Shipped in v0.4.0 as the `efficiency` CLI command and `analyze_efficiency()` in Python: for the whole report and for each model and tag it sums calls, input and output tokens, and cost, then derives the output-to-input token ratio and the cost per 1K output tokens (plus cost per 1K input tokens in the API). A ratio below 1.00 flags buckets that consume more input than they produce, and rows are sorted by descending cost so the biggest spend surfaces first. Records missing a model or with non-numeric or negative token or cost fields are skipped and counted, and `--json-output` makes it scriptable. Python API: `analyze_efficiency`, `EfficiencyReport`, `EfficiencyStat`.
 
+### 🪟 Context Window Utilization
+Per-model average and p95 input-token usage against each model's context window, so teams can see which calls run close to the limit and which models are over-provisioned for the prompts they actually receive. Shipped in v0.5.0 as the `context` CLI command and `analyze_context()` in Python: for each model it shows average, p95, and max input tokens against the window from the built-in registry (prefix matches cover versioned names), the p95 utilization percentage, and the number of calls at or above the `--near-limit` fraction (default 0.8). `--window MODEL=TOKENS` overrides or extends the registry for custom models, unknown models are listed with a hint instead of guessed, `--fail-near-limit` exits 2 for CI gating, and `--json-output` makes it scriptable. Python API: `analyze_context`, `ContextReport`, `ContextStat`, `resolve_window`.
+
 ---
 
-## v0.5 (Planned)
+## v0.6 (Planned)
 
-### 🪟 Context Window Utilization
-Per-model average and p95 input-token usage against each model's context window, so teams can see which calls run close to the limit and which models are over-provisioned for the prompts they actually receive.
+### 🗃️ Cache-Aware Cost Tracking
+Track prompt cache reads and writes separately from regular input tokens so reports reflect provider caching discounts, show real savings from caching, and flag calls that would benefit from enabling it.
 
 ---
 

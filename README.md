@@ -29,6 +29,7 @@ LLM API costs can spiral out of control fast - a single runaway loop can burn th
 - 📥 **Merge and dedupe** - combine per-service ledgers and reports into one view with `merge`
 - 📈 **Cost anomaly detection** - `anomalies` flags days, models, or users whose spend spikes
 - 🧮 **Token efficiency report** - `efficiency` shows output/input ratios and cost per 1K output tokens by model and tag
+- 🪟 **Context window utilization** - `context` shows avg/p95/max input tokens against each model's window and flags calls near the limit
 - 📈 **Prometheus export** - expose metrics for your monitoring stack
 - 💾 **JSON & CSV export** - save usage reports for analysis
 - 🖥️ **CLI tool** - estimate costs and view reports from the terminal
@@ -470,6 +471,48 @@ The same analysis is available in Python via `analyze_efficiency(report_dict)`,
 returning an `EfficiencyReport` with typed `EfficiencyStat` rows (which also
 expose `cost_per_1k_input`) and `to_dict()` for serialization.
 
+### Context Window Utilization
+
+See how close your calls actually run to each model's context window. The
+`context` command shows, per model, the average, p95, and max input tokens
+against the model's context window, plus how many calls run at or above the
+near-limit fraction (default 80% of the window):
+
+```bash
+llm-cost-guardian context usage_report.json
+llm-cost-guardian context usage_report.json --near-limit 0.9 --json-output
+
+# Custom or fine-tuned models: supply the window yourself
+llm-cost-guardian context usage_report.json --window my-finetune=32000
+
+# CI gate: exit 2 when any model's p95 utilization crosses the threshold
+llm-cost-guardian context usage_report.json --fail-near-limit
+```
+
+```
+=== Context Window Utilization ===
+Analyzed 412 record(s); near-limit threshold 80% of the window.
+
+Model                              Calls     Avg in     P95 in     Max in      Window  P95 util  Near
+----------------------------------------------------------------------------------------------------
+gpt-4                                 40      6,100      7,900      8,100       8,192     96.4%     9
+gpt-4o                               260      2,300      5,100      9,800     128,000      4.0%     0
+my-finetune                          112     18,000     29,500     31,900           ?         -     -
+
+No known context window for: my-finetune. Use --window MODEL=TOKENS to supply one.
+
+Near limit (80% p95 utilization): gpt-4
+```
+
+High p95 utilization means truncation risk and no headroom for retrieval or
+history growth; very low utilization on an expensive long-context model means
+you may be over-provisioned for the prompts you actually send. Window sizes
+come from the built-in model registry (prefix matches cover versioned names
+like `gpt-4o-2024-08-06`), and `--window MODEL=TOKENS` overrides or extends
+it. The same analysis is available in Python via `analyze_context(report_dict,
+windows=..., near_limit=...)`, returning a `ContextReport` with typed
+`ContextStat` rows and `to_dict()` for serialization.
+
 ### CLI Usage
 
 ```bash
@@ -522,6 +565,9 @@ llm-cost-guardian merge api.jsonl worker.jsonl -o combined.json
 
 # Flag spend spikes versus the trailing average (exit 2 when found)
 llm-cost-guardian anomalies usage_report.json --window 7 -t 2.0
+
+# Per-model context window utilization (exit 2 with --fail-near-limit)
+llm-cost-guardian context usage_report.json --near-limit 0.8
 ```
 
 Example `tags` output:
