@@ -30,6 +30,7 @@ LLM API costs can spiral out of control fast - a single runaway loop can burn th
 - 📈 **Cost anomaly detection** - `anomalies` flags days, models, or users whose spend spikes
 - 🧮 **Token efficiency report** - `efficiency` shows output/input ratios and cost per 1K output tokens by model and tag
 - 🪟 **Context window utilization** - `context` shows avg/p95/max input tokens against each model's window and flags calls near the limit
+- 🗃️ **Cache-aware cost tracking** - cache reads and writes billed at real cache prices, with a `cache` command showing hit rates, savings, and caching candidates
 - 📈 **Prometheus export** - expose metrics for your monitoring stack
 - 💾 **JSON & CSV export** - save usage reports for analysis
 - 🖥️ **CLI tool** - estimate costs and view reports from the terminal
@@ -513,6 +514,76 @@ it. The same analysis is available in Python via `analyze_context(report_dict,
 windows=..., near_limit=...)`, returning a `ContextReport` with typed
 `ContextStat` rows and `to_dict()` for serialization.
 
+### Cache-Aware Cost Tracking
+
+Prompt caching changes what input tokens cost: cache reads are heavily
+discounted (10x cheaper on Anthropic, 2x to 4x on OpenAI and Gemini) and
+Anthropic bills cache writes at a 1.25x premium. Record cache activity
+separately and costs are computed at the real rates:
+
+```python
+from llm_cost_guardian import CostTracker
+
+tracker = CostTracker()
+
+# 200 uncached input tokens, 20K tokens served from the prompt cache
+tracker.record(
+    "claude-sonnet-4-20250514", input_tokens=200, output_tokens=400,
+    cache_read_tokens=20_000,
+)
+
+# First call of a session usually writes the cache instead
+tracker.record(
+    "claude-sonnet-4-20250514", input_tokens=200, output_tokens=400,
+    cache_write_tokens=20_000,
+)
+
+print(tracker.total_cache_read_tokens)   # 20000
+print(tracker.summary()["total_cache_read_tokens"])
+```
+
+The `TrackedOpenAI` and `TrackedAnthropic` wrappers do this automatically:
+OpenAI's `prompt_tokens_details.cached_tokens` is split out of
+`prompt_tokens`, and Anthropic's `cache_read_input_tokens` /
+`cache_creation_input_tokens` are recorded as cache reads and writes. Cache
+tokens flow through every exporter (JSON, CSV, Prometheus, markdown), the
+ledger, and merge; files written before v0.6 load unchanged as fully
+uncached.
+
+The `cache` command shows what caching is actually saving you and where it
+would help:
+
+```bash
+llm-cost-guardian cache usage_report.json
+llm-cost-guardian cache usage_report.json --json-output
+llm-cost-guardian cache usage_report.json --min-candidate-input 2048
+```
+
+```
+=== Prompt Cache Usage ===
+Analyzed 9 record(s); hit rate is cache reads over cache reads plus regular input.
+
+Model                              Calls        Input     Cache rd     Cache wr  Hit rate         Cost        Saved
+-------------------------------------------------------------------------------------------------------------------
+(all models)                           9       16,100       80,000       20,000     83.2%      $0.1785      $0.2010
+claude-sonnet-4-20250514               5        1,000       80,000       20,000     98.8%      $0.1320      $0.2010
+gpt-4o                                 3       15,000            0            0      0.0%      $0.0465      $0.0000
+gpt-4o-mini                            1          100            0            0      0.0%      $0.0000      $0.0000
+
+Caching candidates (no cache usage, avg input >= 1,024 tokens): gpt-4o
+```
+
+Savings compare actual spend to billing every cached token at the regular
+input rate, so Anthropic write premiums count against them; a model doing
+many writes and few reads shows negative savings, which is itself a signal.
+Models sending large prompts with zero cache usage are flagged as
+candidates (`--min-candidate-input` tunes the threshold, matching the
+provider's minimum cacheable prefix). The same analysis is available in
+Python via `analyze_cache(report_dict)`, returning a `CacheReport` with
+typed `CacheStat` rows and `to_dict()` for serialization. Custom models can
+declare cache prices too:
+`register_model("my-model", "openai", 1.00, 3.00, cache_read_cost_per_1m=0.10)`.
+
 ### CLI Usage
 
 ```bash
@@ -568,6 +639,9 @@ llm-cost-guardian anomalies usage_report.json --window 7 -t 2.0
 
 # Per-model context window utilization (exit 2 with --fail-near-limit)
 llm-cost-guardian context usage_report.json --near-limit 0.8
+
+# Prompt cache usage, savings, and caching candidates
+llm-cost-guardian cache usage_report.json
 ```
 
 Example `tags` output:

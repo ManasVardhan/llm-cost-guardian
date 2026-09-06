@@ -45,7 +45,12 @@ def _normalize_tags(tags: Sequence[str] | None) -> tuple[str, ...]:
 
 @dataclass(slots=True)
 class UsageRecord:
-    """A single API call's usage and cost."""
+    """A single API call's usage and cost.
+
+    ``input_tokens`` counts regular (uncached) input tokens.
+    ``cache_read_tokens`` and ``cache_write_tokens`` count prompt cache hits
+    and cache writes, which most providers bill at different rates.
+    """
 
     model: str
     input_tokens: int
@@ -55,10 +60,22 @@ class UsageRecord:
     metadata: dict[str, str] = field(default_factory=dict)
     tags: tuple[str, ...] = ()
     user: str | None = None
+    cache_read_tokens: int = 0
+    cache_write_tokens: int = 0
 
     @property
     def total_tokens(self) -> int:
-        return self.input_tokens + self.output_tokens
+        return (
+            self.input_tokens
+            + self.output_tokens
+            + self.cache_read_tokens
+            + self.cache_write_tokens
+        )
+
+    @property
+    def cached_tokens(self) -> int:
+        """Cache read plus cache write tokens."""
+        return self.cache_read_tokens + self.cache_write_tokens
 
 
 CostCallback = Callable[[UsageRecord, float], None]
@@ -79,6 +96,8 @@ class CostTracker:
         self._total_cost: float = 0.0
         self._total_input_tokens: int = 0
         self._total_output_tokens: int = 0
+        self._total_cache_read_tokens: int = 0
+        self._total_cache_write_tokens: int = 0
         self._on_record = on_record
         self._ledger: CostLedger | None = None
 
@@ -103,6 +122,8 @@ class CostTracker:
         metadata: dict[str, str] | None = None,
         tags: Sequence[str] | None = None,
         user: str | None = None,
+        cache_read_tokens: int = 0,
+        cache_write_tokens: int = 0,
     ) -> UsageRecord:
         """Record a single API call. If *cost* is None it is calculated from pricing data.
 
@@ -113,15 +134,31 @@ class CostTracker:
         *user* is an optional identifier (username, email, API key alias) that
         attributes the call's cost to a person or key. Whitespace is stripped
         and empty strings are treated as no attribution.
+
+        *cache_read_tokens* and *cache_write_tokens* count prompt cache hits
+        and writes. When *cost* is None they are billed at the model's cache
+        prices (falling back to the input rate when the model has none).
+        *input_tokens* should count only regular, uncached input tokens.
         """
         if input_tokens < 0 or output_tokens < 0:
             raise ValueError(
                 f"Token counts must be non-negative, got input_tokens={input_tokens}, "
                 f"output_tokens={output_tokens}"
             )
+        if cache_read_tokens < 0 or cache_write_tokens < 0:
+            raise ValueError(
+                f"Cache token counts must be non-negative, got "
+                f"cache_read_tokens={cache_read_tokens}, "
+                f"cache_write_tokens={cache_write_tokens}"
+            )
         if cost is None:
             pricing = get_pricing(model)
-            cost = pricing.calculate_cost(input_tokens, output_tokens)
+            cost = pricing.calculate_cost(
+                input_tokens,
+                output_tokens,
+                cache_read_tokens=cache_read_tokens,
+                cache_write_tokens=cache_write_tokens,
+            )
 
         rec = UsageRecord(
             model=model,
@@ -131,6 +168,8 @@ class CostTracker:
             metadata=metadata or {},
             tags=_normalize_tags(tags),
             user=_normalize_user(user),
+            cache_read_tokens=cache_read_tokens,
+            cache_write_tokens=cache_write_tokens,
         )
 
         with self._lock:
@@ -138,6 +177,8 @@ class CostTracker:
             self._total_cost += cost
             self._total_input_tokens += input_tokens
             self._total_output_tokens += output_tokens
+            self._total_cache_read_tokens += cache_read_tokens
+            self._total_cache_write_tokens += cache_write_tokens
             cumulative = self._total_cost
             ledger = self._ledger
 
@@ -162,11 +203,19 @@ class CostTracker:
                 f"input_tokens={record.input_tokens}, "
                 f"output_tokens={record.output_tokens}"
             )
+        if record.cache_read_tokens < 0 or record.cache_write_tokens < 0:
+            raise ValueError(
+                f"Cache token counts must be non-negative, got "
+                f"cache_read_tokens={record.cache_read_tokens}, "
+                f"cache_write_tokens={record.cache_write_tokens}"
+            )
         with self._lock:
             self._records.append(record)
             self._total_cost += record.cost
             self._total_input_tokens += record.input_tokens
             self._total_output_tokens += record.output_tokens
+            self._total_cache_read_tokens += record.cache_read_tokens
+            self._total_cache_write_tokens += record.cache_write_tokens
         return record
 
     def attach_ledger(
@@ -221,9 +270,24 @@ class CostTracker:
             return self._total_output_tokens
 
     @property
+    def total_cache_read_tokens(self) -> int:
+        with self._lock:
+            return self._total_cache_read_tokens
+
+    @property
+    def total_cache_write_tokens(self) -> int:
+        with self._lock:
+            return self._total_cache_write_tokens
+
+    @property
     def total_tokens(self) -> int:
         with self._lock:
-            return self._total_input_tokens + self._total_output_tokens
+            return (
+                self._total_input_tokens
+                + self._total_output_tokens
+                + self._total_cache_read_tokens
+                + self._total_cache_write_tokens
+            )
 
     @property
     def records(self) -> list[UsageRecord]:
@@ -308,6 +372,8 @@ class CostTracker:
             self._total_cost = 0.0
             self._total_input_tokens = 0
             self._total_output_tokens = 0
+            self._total_cache_read_tokens = 0
+            self._total_cache_write_tokens = 0
 
     @property
     def average_cost(self) -> float:
@@ -375,6 +441,8 @@ class CostTracker:
                 "total_cost_usd": round(self._total_cost, 6),
                 "total_input_tokens": self._total_input_tokens,
                 "total_output_tokens": self._total_output_tokens,
+                "total_cache_read_tokens": self._total_cache_read_tokens,
+                "total_cache_write_tokens": self._total_cache_write_tokens,
                 "total_requests": len(self._records),
                 "cost_by_model": self._cost_by_model_unlocked(),
                 "cost_by_tag": self._cost_by_tag_unlocked(),

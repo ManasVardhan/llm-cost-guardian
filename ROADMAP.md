@@ -35,12 +35,15 @@ Spot prompts and models that burn input tokens without producing output. Shipped
 ### 🪟 Context Window Utilization
 Per-model average and p95 input-token usage against each model's context window, so teams can see which calls run close to the limit and which models are over-provisioned for the prompts they actually receive. Shipped in v0.5.0 as the `context` CLI command and `analyze_context()` in Python: for each model it shows average, p95, and max input tokens against the window from the built-in registry (prefix matches cover versioned names), the p95 utilization percentage, and the number of calls at or above the `--near-limit` fraction (default 0.8). `--window MODEL=TOKENS` overrides or extends the registry for custom models, unknown models are listed with a hint instead of guessed, `--fail-near-limit` exits 2 for CI gating, and `--json-output` makes it scriptable. Python API: `analyze_context`, `ContextReport`, `ContextStat`, `resolve_window`.
 
+### 🗃️ Cache-Aware Cost Tracking
+Track prompt cache reads and writes separately from regular input tokens so reports reflect provider caching discounts, show real savings from caching, and flag calls that would benefit from enabling it. Shipped in v0.6.0: `tracker.record(..., cache_read_tokens=, cache_write_tokens=)` bills cache activity at each model's published cache prices (Anthropic read 0.1x and write 1.25x, OpenAI and Gemini discounted reads, input-rate fallback for models without cache pricing), the `TrackedOpenAI` and `TrackedAnthropic` wrappers extract cached token counts from responses automatically, and cache tokens flow through summaries, JSON, CSV, Prometheus, markdown, the ledger, and merge (pre-v0.6 files load unchanged). The `cache` CLI command and `analyze_cache()` in Python show per-model cache reads, writes, hit rate, spend, and savings versus paying the full input rate (write premiums count against savings), flag large-prompt models with zero cache usage as caching candidates via `--min-candidate-input`, and support `--json-output`. Python API: `analyze_cache`, `CacheReport`, `CacheStat`, plus cache price fields on `ModelPricing` and `register_model`.
+
 ---
 
-## v0.6 (Planned)
+## v0.7 (Planned)
 
-### 🗃️ Cache-Aware Cost Tracking
-Track prompt cache reads and writes separately from regular input tokens so reports reflect provider caching discounts, show real savings from caching, and flag calls that would benefit from enabling it.
+### 💱 Configurable Pricing File
+Load and pin model prices from a local JSON or YAML file so teams can track negotiated rates, new models, and price changes without upgrading the package, with a `prices` CLI command to view, diff, and validate the active price table.
 
 ---
 

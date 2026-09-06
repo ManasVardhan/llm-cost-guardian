@@ -41,6 +41,8 @@ def _record_to_line(record: UsageRecord) -> str:
             "metadata": record.metadata,
             "tags": list(record.tags),
             "user": record.user,
+            "cache_read_tokens": record.cache_read_tokens,
+            "cache_write_tokens": record.cache_write_tokens,
         },
         default=str,
     )
@@ -60,7 +62,9 @@ def record_from_dict(data: object) -> UsageRecord | None:
 
     Accepts the schema shared by ledger lines and JSON report entries:
     ``model``, ``input_tokens``, ``output_tokens``, ``cost_usd`` are required;
-    ``timestamp``, ``metadata``, ``tags``, and ``user`` are optional.
+    ``timestamp``, ``metadata``, ``tags``, ``user``, ``cache_read_tokens``,
+    and ``cache_write_tokens`` are optional (cache fields default to 0 so
+    ledgers written before v0.6 load unchanged).
     """
     if not isinstance(data, dict):
         return None
@@ -75,9 +79,13 @@ def record_from_dict(data: object) -> UsageRecord | None:
         output_tokens = int(data["output_tokens"])
         cost = float(data["cost_usd"])
         timestamp = float(data.get("timestamp") or 0.0)
+        cache_read_tokens = int(data.get("cache_read_tokens") or 0)
+        cache_write_tokens = int(data.get("cache_write_tokens") or 0)
     except (TypeError, ValueError):
         return None
     if input_tokens < 0 or output_tokens < 0 or timestamp < 0:
+        return None
+    if cache_read_tokens < 0 or cache_write_tokens < 0:
         return None
 
     metadata = data.get("metadata")
@@ -100,6 +108,8 @@ def record_from_dict(data: object) -> UsageRecord | None:
         metadata={str(k): str(v) for k, v in metadata.items()},
         tags=tags,
         user=user,
+        cache_read_tokens=cache_read_tokens,
+        cache_write_tokens=cache_write_tokens,
     )
 
 

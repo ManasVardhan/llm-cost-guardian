@@ -1265,6 +1265,93 @@ def context(
         sys.exit(2)
 
 
+@cli.command("cache")
+@click.argument("report_file", type=click.Path(exists=True))
+@click.option(
+    "--min-candidate-input",
+    type=float,
+    default=1024.0,
+    show_default=True,
+    help="Average input tokens per call at which an uncached model becomes a caching candidate.",
+)
+@click.option("--json-output", "as_json", is_flag=True, help="Output as JSON.")
+def cache(report_file: str, min_candidate_input: float, as_json: bool) -> None:
+    """Report prompt cache usage and savings for a saved report.
+
+    For each model, shows regular input tokens versus cache read and cache
+    write tokens, the cache hit rate, actual spend, and the savings caching
+    produced versus paying the full input rate (using each model's published
+    cache prices; Anthropic-style write premiums count against savings).
+    Models that send large prompts with no cache usage are flagged as
+    candidates that would likely benefit from enabling caching.
+
+    Reports written before v0.6 have no cache fields and are treated as
+    fully uncached. Exit codes: 0 on success, 1 on invalid input.
+    """
+    from .cache import CacheStat, analyze_cache
+
+    data = _load_report(report_file)
+    try:
+        result = analyze_cache(data, min_candidate_input=min_candidate_input)
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+    if as_json:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+        return
+
+    click.echo("=== Prompt Cache Usage ===")
+    click.echo(
+        f"Analyzed {result.records_analyzed:,} record(s); "
+        f"hit rate is cache reads over cache reads plus regular input."
+    )
+    if result.records_skipped:
+        click.echo(
+            f"Warning: skipped {result.records_skipped} record(s) without usable data.",
+            err=True,
+        )
+
+    if result.records_analyzed == 0:
+        click.echo("\nNo usable records found.")
+        return
+
+    def _fmt_savings(stat: CacheStat) -> str:
+        if stat.savings is None:
+            return "?"
+        return f"${stat.savings:,.4f}"
+
+    header = (
+        f"{'Model':<32} {'Calls':>7} {'Input':>12} {'Cache rd':>12} "
+        f"{'Cache wr':>12} {'Hit rate':>9} {'Cost':>12} {'Saved':>12}"
+    )
+    click.echo()
+    click.echo(header)
+    click.echo("-" * 115)
+    rows = [result.overall] + result.by_model if len(result.by_model) > 1 else result.by_model
+    for s in rows:
+        click.echo(
+            f"{s.key:<32.32} {s.calls:>7,} {s.input_tokens:>12,} "
+            f"{s.cache_read_tokens:>12,} {s.cache_write_tokens:>12,} "
+            f"{s.hit_rate * 100:>8.1f}% {'$' + format(s.cost, ',.4f'):>12} "
+            f"{_fmt_savings(s):>12}"
+        )
+
+    unpriced = result.unpriced_models
+    if unpriced:
+        click.echo(
+            f"\nNo pricing data for: {', '.join(unpriced)}. "
+            f"Savings shown are a lower bound over priced models."
+        )
+    if result.candidates:
+        click.echo(
+            f"\nCaching candidates (no cache usage, avg input >= "
+            f"{min_candidate_input:,.0f} tokens): {', '.join(result.candidates)}"
+        )
+    elif not result.overall.uses_cache:
+        click.echo("\nNo cache usage recorded and no obvious candidates.")
+
+
 def main() -> None:
     cli()
 

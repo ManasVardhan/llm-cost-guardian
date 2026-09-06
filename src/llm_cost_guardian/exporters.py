@@ -23,6 +23,8 @@ def to_json(tracker: CostTracker, indent: int = 2) -> str:
             "metadata": r.metadata,
             "tags": list(r.tags),
             "user": r.user,
+            "cache_read_tokens": r.cache_read_tokens,
+            "cache_write_tokens": r.cache_write_tokens,
         }
         for r in tracker.records
     ]
@@ -38,7 +40,17 @@ def to_csv(tracker: CostTracker) -> str:
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow(
-        ["timestamp", "model", "input_tokens", "output_tokens", "cost_usd", "tags", "user"]
+        [
+            "timestamp",
+            "model",
+            "input_tokens",
+            "output_tokens",
+            "cache_read_tokens",
+            "cache_write_tokens",
+            "cost_usd",
+            "tags",
+            "user",
+        ]
     )
     for r in tracker.records:
         writer.writerow(
@@ -47,6 +59,8 @@ def to_csv(tracker: CostTracker) -> str:
                 r.model,
                 r.input_tokens,
                 r.output_tokens,
+                r.cache_read_tokens,
+                r.cache_write_tokens,
                 round(r.cost, 8),
                 ";".join(r.tags),
                 r.user or "",
@@ -74,6 +88,15 @@ def to_prometheus(tracker: CostTracker, prefix: str = "llm_cost_guardian") -> st
     lines.append(f"# HELP {prefix}_total_output_tokens Total output tokens")
     lines.append(f"# TYPE {prefix}_total_output_tokens counter")
     lines.append(f"{prefix}_total_output_tokens {tracker.total_output_tokens}")
+
+    if tracker.total_cache_read_tokens or tracker.total_cache_write_tokens:
+        lines.append(f"# HELP {prefix}_total_cache_read_tokens Total prompt cache read tokens")
+        lines.append(f"# TYPE {prefix}_total_cache_read_tokens counter")
+        lines.append(f"{prefix}_total_cache_read_tokens {tracker.total_cache_read_tokens}")
+
+        lines.append(f"# HELP {prefix}_total_cache_write_tokens Total prompt cache write tokens")
+        lines.append(f"# TYPE {prefix}_total_cache_write_tokens counter")
+        lines.append(f"{prefix}_total_cache_write_tokens {tracker.total_cache_write_tokens}")
 
     lines.append(f"# HELP {prefix}_cost_by_model_usd Cost per model in USD")
     lines.append(f"# TYPE {prefix}_cost_by_model_usd gauge")
@@ -121,7 +144,12 @@ def to_markdown(tracker: CostTracker, title: str = "LLM Cost Report") -> str:
     lines.append(f"| Total requests | {total_requests:,} |")
     lines.append(f"| Input tokens | {total_in:,} |")
     lines.append(f"| Output tokens | {total_out:,} |")
-    lines.append(f"| Total tokens | {total_in + total_out:,} |")
+    cache_read = tracker.total_cache_read_tokens
+    cache_write = tracker.total_cache_write_tokens
+    if cache_read or cache_write:
+        lines.append(f"| Cache read tokens | {cache_read:,} |")
+        lines.append(f"| Cache write tokens | {cache_write:,} |")
+    lines.append(f"| Total tokens | {total_in + total_out + cache_read + cache_write:,} |")
     if total_requests:
         lines.append(f"| Avg cost per request | ${total_cost / total_requests:.6f} |")
     lines.append("")

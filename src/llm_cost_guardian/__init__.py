@@ -18,6 +18,7 @@ from .budget import (
     SlidingWindowPolicy,
     SoftWarningPolicy,
 )
+from .cache import CacheReport, CacheStat, analyze_cache
 from .context_window import ContextReport, ContextStat, analyze_context, resolve_window
 from .dashboard import build_dashboard_data, render_dashboard
 from .efficiency import EfficiencyReport, EfficiencyStat, analyze_efficiency
@@ -36,7 +37,7 @@ from .models import ModelPricing, Provider, get_pricing, list_models, register_m
 from .tracker import UNATTRIBUTED, UNTAGGED, CostTracker, UsageRecord
 from .wrappers import TrackedAnthropic, TrackedOpenAI
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 __all__ = [
     "Action",
@@ -47,6 +48,8 @@ __all__ = [
     "BudgetError",
     "BudgetManager",
     "BudgetResult",
+    "CacheReport",
+    "CacheStat",
     "ContextReport",
     "ContextStat",
     "CostAlerter",
@@ -71,6 +74,7 @@ __all__ = [
     "UsageRecord",
     "Webhook",
     "analyze_anomalies",
+    "analyze_cache",
     "analyze_context",
     "analyze_efficiency",
     "build_dashboard_data",

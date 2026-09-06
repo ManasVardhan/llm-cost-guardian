@@ -58,10 +58,17 @@ class _OpenAICompletions:
 
         if hasattr(response, "usage") and response.usage is not None:
             model = getattr(response, "model", kwargs.get("model", "unknown"))
+            usage = response.usage
+            # OpenAI reports cache hits in prompt_tokens_details.cached_tokens
+            # and includes them inside prompt_tokens, so split them out.
+            details = getattr(usage, "prompt_tokens_details", None)
+            cached = getattr(details, "cached_tokens", 0) or 0
+            input_tokens = max(usage.prompt_tokens - cached, 0)
             self._wrapper._tracker.record(
                 model=model,
-                input_tokens=response.usage.prompt_tokens,
-                output_tokens=response.usage.completion_tokens,
+                input_tokens=input_tokens,
+                output_tokens=usage.completion_tokens,
+                cache_read_tokens=cached,
             )
 
         return response
@@ -108,10 +115,18 @@ class _AnthropicMessages:
 
         if hasattr(response, "usage") and response.usage is not None:
             model = getattr(response, "model", kwargs.get("model", "unknown"))
+            usage = response.usage
+            # Anthropic reports cache activity separately from input_tokens:
+            # cache_read_input_tokens (hits) and cache_creation_input_tokens
+            # (writes billed at a premium).
+            cache_read = getattr(usage, "cache_read_input_tokens", 0) or 0
+            cache_write = getattr(usage, "cache_creation_input_tokens", 0) or 0
             self._wrapper._tracker.record(
                 model=model,
-                input_tokens=response.usage.input_tokens,
-                output_tokens=response.usage.output_tokens,
+                input_tokens=usage.input_tokens,
+                output_tokens=usage.output_tokens,
+                cache_read_tokens=cache_read,
+                cache_write_tokens=cache_write,
             )
 
         return response
