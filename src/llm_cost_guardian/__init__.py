@@ -34,10 +34,20 @@ from .exporters import (
 from .ledger import CostLedger, record_from_dict
 from .merge import MergeError, MergeResult, SourceStats, load_records, merge_sources
 from .models import ModelPricing, Provider, get_pricing, list_models, register_model
+from .pricing_file import (
+    PriceDiff,
+    PriceDiffRow,
+    PriceEntry,
+    PriceFileError,
+    apply_price_file,
+    diff_price_file,
+    load_price_file,
+    validate_price_file,
+)
 from .tracker import UNATTRIBUTED, UNTAGGED, CostTracker, UsageRecord
 from .wrappers import TrackedAnthropic, TrackedOpenAI
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 
 __all__ = [
     "Action",
@@ -62,6 +72,10 @@ __all__ = [
     "MergeError",
     "MergeResult",
     "ModelPricing",
+    "PriceDiff",
+    "PriceDiffRow",
+    "PriceEntry",
+    "PriceFileError",
     "Provider",
     "SlackWebhook",
     "SlidingWindowPolicy",
@@ -77,13 +91,17 @@ __all__ = [
     "analyze_cache",
     "analyze_context",
     "analyze_efficiency",
+    "apply_price_file",
     "build_dashboard_data",
+    "diff_price_file",
     "get_pricing",
     "list_models",
+    "load_price_file",
     "load_records",
     "merge_sources",
     "record_from_dict",
     "register_model",
+    "validate_price_file",
     "render_dashboard",
     "resolve_window",
     "save_csv",

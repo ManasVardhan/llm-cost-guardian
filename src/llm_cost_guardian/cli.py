@@ -8,7 +8,7 @@ import sys
 
 import click
 
-from .models import Provider, list_models
+from .models import PRICING, Provider, list_models
 
 
 def _percentile(values: list[float], pct: float) -> float:
@@ -1350,6 +1350,152 @@ def cache(report_file: str, min_candidate_input: float, as_json: bool) -> None:
         )
     elif not result.overall.uses_cache:
         click.echo("\nNo cache usage recorded and no obvious candidates.")
+
+
+def _fmt_price(value: float | None) -> str:
+    return "-" if value is None else f"${value:,.4f}"
+
+
+@cli.group()
+def prices() -> None:
+    """View, diff, and validate a JSON or YAML model price table."""
+
+
+@prices.command("view")
+@click.option(
+    "--file", "-f", "price_file", type=click.Path(exists=True), default=None,
+    help="Show a price file's table (validated) instead of the active registry",
+)
+@click.option(
+    "--provider", type=click.Choice(["openai", "anthropic", "google"]), default=None,
+    help="Filter to one provider",
+)
+@click.option("--json-output", "as_json", is_flag=True, help="Output as JSON")
+def prices_view(price_file: str | None, provider: str | None, as_json: bool) -> None:
+    """Show the active price table, or a file's table with --file."""
+    from .pricing_file import PriceFileError, load_price_file
+
+    if price_file is not None:
+        try:
+            entries = load_price_file(price_file)
+        except PriceFileError as exc:
+            click.echo(str(exc), err=True)
+            sys.exit(1)
+        rows = [
+            {
+                "name": e.name,
+                "provider": e.provider,
+                "input_cost_per_1m": e.input_cost_per_1m,
+                "output_cost_per_1m": e.output_cost_per_1m,
+                "context_window": e.context_window,
+                "cache_read_cost_per_1m": e.cache_read_cost_per_1m,
+                "cache_write_cost_per_1m": e.cache_write_cost_per_1m,
+            }
+            for e in entries
+        ]
+    else:
+        rows = [
+            {
+                "name": m.name,
+                "provider": m.provider.value,
+                "input_cost_per_1m": m.input_cost_per_1m,
+                "output_cost_per_1m": m.output_cost_per_1m,
+                "context_window": m.context_window,
+                "cache_read_cost_per_1m": m.cache_read_cost_per_1m,
+                "cache_write_cost_per_1m": m.cache_write_cost_per_1m,
+            }
+            for m in PRICING.values()
+        ]
+
+    if provider is not None:
+        rows = [r for r in rows if r["provider"] == provider]
+    rows.sort(key=lambda r: r["name"])
+
+    if as_json:
+        click.echo(json.dumps(rows, indent=2))
+        return
+
+    source = price_file if price_file else "active registry"
+    click.echo(f"=== Price table ({source}) ===")
+    click.echo(
+        f"{'Model':<40} {'Provider':<10} {'Input/1M':>10} {'Output/1M':>10} "
+        f"{'Cache rd':>10} {'Cache wr':>10}"
+    )
+    click.echo("-" * 94)
+    for r in rows:
+        click.echo(
+            f"{r['name']:<40.40} {r['provider']:<10} "
+            f"{_fmt_price(r['input_cost_per_1m']):>10} "
+            f"{_fmt_price(r['output_cost_per_1m']):>10} "
+            f"{_fmt_price(r['cache_read_cost_per_1m']):>10} "
+            f"{_fmt_price(r['cache_write_cost_per_1m']):>10}"
+        )
+    click.echo(f"\n{len(rows)} model(s).")
+
+
+@prices.command("diff")
+@click.argument("price_file", type=click.Path(exists=True))
+@click.option("--json-output", "as_json", is_flag=True, help="Output as JSON")
+def prices_diff(price_file: str, as_json: bool) -> None:
+    """Show what PRICE_FILE would change versus the active price table.
+
+    Exits 0 when every model matches, 2 when the file adds or changes any
+    model, and 1 when the file cannot be read.
+    """
+    from .pricing_file import PriceFileError, diff_price_file
+
+    try:
+        diff = diff_price_file(price_file)
+    except PriceFileError as exc:
+        click.echo(str(exc), err=True)
+        sys.exit(1)
+
+    if as_json:
+        click.echo(json.dumps(diff.to_dict(), indent=2))
+    else:
+        click.echo(f"=== Price diff: {price_file} vs active registry ===")
+        if diff.added:
+            click.echo("\nNew models:")
+            for row in diff.added:
+                click.echo(f"  + {row.name}")
+        if diff.changed:
+            click.echo("\nChanged models:")
+            for row in diff.changed:
+                click.echo(f"  ~ {row.name}")
+                for change in row.changes:
+                    click.echo(
+                        f"      {change.field}: "
+                        f"{_fmt_price(change.old) if 'window' not in change.field else change.old}"
+                        f" -> "
+                        f"{_fmt_price(change.new) if 'window' not in change.field else change.new}"
+                    )
+        if not diff.added and not diff.changed:
+            click.echo("\nNo changes. Every model in the file matches the active prices.")
+        click.echo(
+            f"\nAdded: {len(diff.added)} | Changed: {len(diff.changed)} | "
+            f"Unchanged: {len(diff.unchanged)}"
+        )
+
+    if diff.added or diff.changed:
+        sys.exit(2)
+
+
+@prices.command("validate")
+@click.argument("price_file", type=click.Path(exists=True))
+def prices_validate(price_file: str) -> None:
+    """Validate PRICE_FILE without touching the registry.
+
+    Exits 0 when the file is valid, 1 when it has problems.
+    """
+    from .pricing_file import validate_price_file
+
+    errors = validate_price_file(price_file)
+    if errors:
+        click.echo(f"{price_file} is invalid ({len(errors)} problem(s)):", err=True)
+        for error in errors:
+            click.echo(f"  - {error}", err=True)
+        sys.exit(1)
+    click.echo(f"{price_file} is valid.")
 
 
 def main() -> None:

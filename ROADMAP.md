@@ -40,10 +40,17 @@ Track prompt cache reads and writes separately from regular input tokens so repo
 
 ---
 
-## v0.7 (Planned)
+## Shipped in v0.7
 
 ### 💱 Configurable Pricing File
-Load and pin model prices from a local JSON or YAML file so teams can track negotiated rates, new models, and price changes without upgrading the package, with a `prices` CLI command to view, diff, and validate the active price table.
+Load and pin model prices from a local JSON or YAML file so teams can track negotiated rates, new models, and price changes without upgrading the package. Shipped in v0.7.0: `apply_price_file(path, replace=False)` registers every model in a file (merge by default, or `replace=True` to pin only the file's models), `load_price_file()` parses and validates entries, `validate_price_file()` returns every problem without touching the registry, and `diff_price_file()` reports which models a file would add or change versus the prices in effect now (per-field old and new values). The file is a JSON or YAML object with a `models` list (a bare list is also accepted); each entry needs name, provider, input_cost_per_1m, and output_cost_per_1m, with optional context_window and cache prices. The `prices` CLI group has `view` (active registry or a file with `--file`, `--provider` filter, `--json-output`), `diff PRICE_FILE` (exit 2 when the file adds or changes any model, CI-friendly), and `validate PRICE_FILE` (exit 1 on problems). YAML needs the `[yaml]` extra; JSON works with no extra deps. Python API: `apply_price_file`, `load_price_file`, `validate_price_file`, `diff_price_file`, `PriceEntry`, `PriceDiff`, `PriceDiffRow`, `PriceFileError`.
+
+---
+
+## v0.8 (Planned)
+
+### 📊 Budget Forecasting from Ledger Trends
+Project month-end spend and budget-exhaustion dates from a persistent ledger's daily trend, so teams see an overspend coming instead of finding out at invoice time.
 
 ---
 
